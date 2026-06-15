@@ -12,13 +12,37 @@ const PAGE = 20;
 export function AuditoriaPage() {
   const [data, setData] = useState<AuditPage | null>(null);
   const [offset, setOffset] = useState(0);
+  const [actionInput, setActionInput] = useState("");
   const [action, setAction] = useState("");
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Debounce the raw input into the committed filter; reset to first page.
   useEffect(() => {
+    const t = setTimeout(() => {
+      setOffset(0);
+      setAction(actionInput.trim());
+    }, 350);
+    return () => clearTimeout(t);
+  }, [actionInput]);
+
+  useEffect(() => {
+    let ignore = false;
+    setLoading(true);
+    setError(null);
     getAudit({ limit: PAGE, offset, action: action || undefined })
-      .then(setData)
-      .catch((e) => setError(e.message));
+      .then((res) => {
+        if (!ignore) setData(res);
+      })
+      .catch((e) => {
+        if (!ignore) setError(e instanceof Error ? e.message : "Error al cargar la bitácora");
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
   }, [offset, action]);
 
   const items = data?.items ?? [];
@@ -51,8 +75,8 @@ export function AuditoriaPage() {
         title="Bitácora"
         action={
           <input
-            value={action}
-            onChange={(e) => { setOffset(0); setAction(e.target.value); }}
+            value={actionInput}
+            onChange={(e) => setActionInput(e.target.value)}
             placeholder="Filtrar por acción…"
             className="rounded-lg border border-line bg-bg-sunken px-3 py-1.5 text-sm text-ink placeholder:text-ink-faint"
           />
@@ -69,7 +93,10 @@ export function AuditoriaPage() {
               </tr>
             </thead>
             <tbody>
-              {items.map((e) => (
+              {loading && (
+                <tr><td colSpan={4} className="px-2 py-6 text-center text-ink-faint">Cargando…</td></tr>
+              )}
+              {!loading && items.map((e) => (
                 <tr key={e.id} className="border-t border-line">
                   <td className="px-2 py-2 text-ink-muted">{new Date(e.created_at).toLocaleString()}</td>
                   <td className="px-2 py-2"><span className="pill border-accent/30 bg-accent/10 text-accent">{e.action}</span></td>
@@ -77,7 +104,7 @@ export function AuditoriaPage() {
                   <td className="px-2 py-2 text-ink-faint">{e.actor_id ? e.actor_id.slice(0, 8) : "system"}</td>
                 </tr>
               ))}
-              {items.length === 0 && (
+              {!loading && items.length === 0 && (
                 <tr><td colSpan={4} className="px-2 py-6 text-center text-ink-faint">Sin eventos.</td></tr>
               )}
             </tbody>
@@ -86,8 +113,8 @@ export function AuditoriaPage() {
         <div className="mt-4 flex items-center justify-between text-sm text-ink-muted">
           <span>{data ? `${offset + 1}–${Math.min(offset + PAGE, data.total)} de ${data.total}` : ""}</span>
           <div className="flex gap-2">
-            <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))} className="pill border-line disabled:opacity-40">Anterior</button>
-            <button disabled={!data || offset + PAGE >= data.total} onClick={() => setOffset(offset + PAGE)} className="pill border-line disabled:opacity-40">Siguiente</button>
+            <button disabled={loading || offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))} className="pill border-line disabled:opacity-40">Anterior</button>
+            <button disabled={loading || !data || offset + PAGE >= data.total} onClick={() => setOffset(offset + PAGE)} className="pill border-line disabled:opacity-40">Siguiente</button>
           </div>
         </div>
       </Card>

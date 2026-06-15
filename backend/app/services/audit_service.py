@@ -57,15 +57,16 @@ def list_events(
     if since is not None:
         filters.append(AuditLog.created_at >= since)
 
-    base = select(AuditLog).where(*filters) if filters else select(AuditLog)
-    total = db.execute(
-        select(func.count()).select_from(base.subquery())
-    ).scalar_one()
+    total = db.scalar(select(func.count(AuditLog.id)).where(*filters))
     items = (
         db.execute(
-            base.order_by(desc(AuditLog.created_at)).limit(limit).offset(offset)
+            select(AuditLog)
+            .where(*filters)
+            .order_by(desc(AuditLog.created_at))
+            .limit(limit)
+            .offset(offset)
         )
         .scalars()
         .all()
     )
-    return list(items), int(total)
+    return list(items), int(total or 0)
