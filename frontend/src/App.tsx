@@ -13,6 +13,9 @@ const LoginPage = lazy(() =>
 const ChangePasswordPage = lazy(() =>
   import("@/pages/ChangePasswordPage").then((m) => ({ default: m.ChangePasswordPage })),
 );
+const ProfilePage = lazy(() =>
+  import("@/pages/ProfilePage").then((m) => ({ default: m.ProfilePage })),
+);
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -74,6 +77,14 @@ export default function App() {
               />
             );
           })}
+          <Route
+            path="/profile"
+            element={
+              <RequireAuth>
+                <ProfilePage />
+              </RequireAuth>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
