@@ -112,6 +112,23 @@ const WorldBank = lazy(() =>
     default: m.WorldBankPage,
   })),
 );
+const Economia = lazy(() =>
+  import("@/modules/economia/EconomiaPage").then((m) => ({ default: m.EconomiaPage })),
+);
+const Banxico = lazy(() =>
+  import("@/modules/banxico/BanxicoPage").then((m) => ({ default: m.BanxicoPage })),
+);
+const Denue = lazy(() =>
+  import("@/modules/denue/DenuePage").then((m) => ({ default: m.DenuePage })),
+);
+const Demografia = lazy(() =>
+  import("@/modules/demografia/DemografiaPage").then((m) => ({
+    default: m.DemografiaPage,
+  })),
+);
+const Indice = lazy(() =>
+  import("@/modules/indice/IndicePage").then((m) => ({ default: m.IndicePage })),
+);
 
 export const MODULES: ModuleDef[] = [
   // Plataforma (active)
@@ -134,9 +151,13 @@ export const MODULES: ModuleDef[] = [
   { key: "territorios", path: "/territorios", label: "Territorios & Secciones", section: "inteligencia", icon: LayersIcon, state: "active", element: Territorios },
   { key: "ieem", path: "/ieem", label: "Estado de México (IEEM)", section: "inteligencia", icon: AnalyticsIcon, state: "active", element: Ieem },
   { key: "worldbank", path: "/indicadores", label: "Indicadores Nacionales", section: "inteligencia", icon: AnalyticsIcon, state: "active", element: WorldBank },
+  { key: "economia", path: "/economia", label: "Economía Territorial", section: "inteligencia", icon: DatabaseIcon, state: "preview", element: Economia },
+  { key: "denue", path: "/unidades-economicas", label: "Unidades Económicas", section: "inteligencia", icon: DatabaseIcon, state: "preview", element: Denue },
+  { key: "banxico", path: "/banxico", label: "Macro-financiero (Banxico)", section: "inteligencia", icon: AnalyticsIcon, state: "preview", element: Banxico },
 
   // Ciudadanía
   { key: "ai-analyst", path: "/ai-analyst", label: "AI Analyst / Copiloto", section: "ciudadania", icon: AiIcon, state: "preview", element: AiAnalyst },
+  { key: "demografia", path: "/demografia", label: "Demografía & Censo", section: "ciudadania", icon: VotersIcon, state: "preview", element: Demografia },
   {
     key: "sentimiento", path: "/sentimiento", label: "Sentimiento Ciudadano", section: "ciudadania", icon: AnalyticsIcon, state: "soon",
     soon: {
@@ -164,6 +185,7 @@ export const MODULES: ModuleDef[] = [
 
   // Gobernanza
   { key: "auditoria", path: "/auditoria", label: "Auditoría & Cumplimiento", section: "gobernanza", icon: ShieldIcon, state: "active", element: Auditoria, roles: ["superadmin", "admin"] },
+  { key: "indice", path: "/indice", label: "Índice Cívico-Territorial", section: "gobernanza", icon: AnalyticsIcon, state: "preview", element: Indice },
   {
     key: "reportes", path: "/reportes", label: "Reportes Ejecutivos", section: "gobernanza", icon: DatabaseIcon, state: "soon",
     soon: {

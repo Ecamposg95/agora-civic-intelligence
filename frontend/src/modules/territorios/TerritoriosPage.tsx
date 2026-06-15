@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getAreas } from "@/api/maps";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { StackedBars } from "@/components/charts/StackedBars";
 import { MapCanvas } from "@/components/maps/MapCanvas";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { DataState } from "@/components/ui/DataState";
@@ -16,18 +17,26 @@ type SelectedArea = AreaProperties & { metric: number };
 interface LevelOption {
   value: string;
   label: string;
+  /** Short status hint so the operator knows which levels carry real data. */
+  hint: string;
 }
 
 const LEVELS: LevelOption[] = [
-  { value: "state", label: "Entidad" },
-  { value: "district", label: "Distrito" },
-  { value: "municipality", label: "Municipio" },
+  { value: "state", label: "Entidad", hint: "32 reales" },
+  { value: "district", label: "Distrito", hint: "ingesta pendiente" },
+  { value: "municipality", label: "Municipio", hint: "121 reales · EdoMex" },
 ];
 
 const LEVEL_LABEL: Record<string, string> = {
   state: "Entidad",
   district: "Distrito",
   municipality: "Municipio",
+};
+
+const BAR_COLOR: Record<string, string> = {
+  state: "#22d3ee",
+  district: "#52646d",
+  municipality: "#f5b53d",
 };
 
 export function TerritoriosPage() {
@@ -77,6 +86,22 @@ export function TerritoriosPage() {
 
   const isEmpty = !loading && !error && features.length === 0;
 
+  // Distribution of the current level: matched (by search) vs the rest.
+  // Counts are real — derived from the fetched FeatureCollection.
+  const matched = filtered.length;
+  const rest = Math.max(0, features.length - matched);
+  const distribution = useMemo(
+    () => [
+      {
+        level: LEVEL_LABEL[level] ?? level,
+        matched,
+        rest,
+      },
+    ],
+    [level, matched, rest],
+  );
+  const barColor = BAR_COLOR[level] ?? "#22d3ee";
+
   return (
     <AppLayout title="Territorios & Secciones" crumb="Inteligencia Electoral">
       <PageHeader
@@ -113,13 +138,17 @@ export function TerritoriosPage() {
               type="button"
               onClick={() => onLevelChange(opt.value)}
               aria-pressed={level === opt.value}
-              className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-all ${
+              title={opt.hint}
+              className={`flex flex-col items-start rounded-lg px-4 py-1.5 leading-tight transition-all ${
                 level === opt.value
                   ? "bg-accent/15 text-accent shadow-glow-accent"
                   : "text-ink-muted hover:text-ink"
               }`}
             >
-              {opt.label}
+              <span className="text-sm font-medium">{opt.label}</span>
+              <span className="text-[10px] font-normal tracking-wide opacity-70">
+                {opt.hint}
+              </span>
             </button>
           ))}
         </div>
@@ -242,6 +271,52 @@ export function TerritoriosPage() {
         </div>
       </div>
 
+      {/* Distribution of areas at the current level (real counts) */}
+      {!isEmpty && (
+        <div
+          className="reveal card-premium mt-4 p-5"
+          style={{ animationDelay: "220ms" }}
+        >
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <div className="eyebrow">Distribución del nivel</div>
+              <div className="font-display text-base font-semibold text-ink">
+                {LEVEL_LABEL[level] ?? level}
+                <span className="ml-2 font-sans text-sm font-normal text-ink-muted">
+                  <AnimatedNumber
+                    value={features.length}
+                    className="tabular-nums text-ink"
+                  />{" "}
+                  áreas reales
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 text-[11px] text-ink-muted">
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className="inline-block h-2 w-2 rounded-sm"
+                  style={{ background: barColor }}
+                />
+                Coincidencias ({matched})
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block h-2 w-2 rounded-sm bg-[#243038]" />
+                Resto ({rest})
+              </span>
+            </div>
+          </div>
+          <StackedBars
+            data={distribution}
+            xKey="level"
+            height={120}
+            series={[
+              { key: "matched", color: barColor },
+              { key: "rest", color: "#243038" },
+            ]}
+          />
+        </div>
+      )}
+
       {/* Selected-area detail strip */}
       {selected && (
         <div className="reveal card-premium hud-corners mt-4 flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
@@ -261,6 +336,19 @@ export function TerritoriosPage() {
                   {selected.code}
                 </span>
               )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs">
+            <div>
+              <div className="eyebrow mb-0.5">Nivel</div>
+              <div className="font-medium text-ink">
+                {LEVEL_LABEL[selected.level] ?? selected.level}
+              </div>
+            </div>
+            <div>
+              <div className="eyebrow mb-0.5">Clave</div>
+              <div className="font-mono text-ink">{selected.code ?? "—"}</div>
             </div>
           </div>
 
