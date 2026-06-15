@@ -54,8 +54,10 @@ def test_areas_returns_feature_collection(client):
 
 
 def test_areas_level_filter(client):
+    _seed_areas(client)
     headers = auth_headers(client, "admin@alpha.gov")
     resp = client.get("/api/maps/areas?level=district", headers=headers)
     assert resp.status_code == 200, resp.text
     levels = {f["properties"]["level"] for f in resp.json()["features"]}
-    assert levels <= {"district"}
+    # Non-empty (proves a positive match) AND exclusively "district" (proves the filter).
+    assert levels == {"district"}
