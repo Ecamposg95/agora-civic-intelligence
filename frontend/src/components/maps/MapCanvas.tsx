@@ -112,8 +112,14 @@ export function MapCanvas({ areas, showAreas, wmsLayers = [], choropleth, basema
     mapRef.current = map;
     popupRef.current = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
 
+    // Keep the canvas sized to its container. Without this the map can init at
+    // 0px (flex/late layout) and render blank until something forces a resize.
+    const ro = new ResizeObserver(() => mapRef.current?.resize());
+    ro.observe(containerRef.current);
+
     map.on("load", () => {
       readyRef.current = true;
+      map.resize();
       map.addSource(AREAS_SOURCE, { type: "geojson", data: EMPTY_FC as never });
       map.addLayer({ id: AREAS_FILL, type: "fill", source: AREAS_SOURCE, paint: FLAT_FILL });
       // Soft teal glow underlay for the boundaries (blurred, low opacity).
@@ -138,7 +144,7 @@ export function MapCanvas({ areas, showAreas, wmsLayers = [], choropleth, basema
       });
     });
 
-    return () => { map.remove(); mapRef.current = null; readyRef.current = false; wmsAddedRef.current = new Set(); };
+    return () => { ro.disconnect(); map.remove(); mapRef.current = null; readyRef.current = false; wmsAddedRef.current = new Set(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
