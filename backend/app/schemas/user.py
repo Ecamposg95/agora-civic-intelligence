@@ -1,0 +1,68 @@
+"""User API schemas (Pydantic v2)."""
+
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+from app.models.user import UserRole
+
+
+class UserBase(BaseModel):
+    email: EmailStr
+    full_name: str = Field(min_length=1, max_length=255)
+    role: UserRole = UserRole.VIEWER
+    phone: str | None = Field(default=None, max_length=40)
+
+
+class UserCreate(UserBase):
+    # If omitted, a temporary password is generated and returned once.
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+    # Honored only for superadmins; otherwise the caller's tenant is used
+    # (Golden Rule #2 — tenant from context, not arbitrary input).
+    organization_id: str | None = None
+
+
+class UserUpdate(BaseModel):
+    full_name: str | None = Field(default=None, max_length=255)
+    role: UserRole | None = None
+    phone: str | None = Field(default=None, max_length=40)
+    is_active: bool | None = None
+
+
+class SelfUpdate(BaseModel):
+    """Self-service profile update (no role/status/tenant changes)."""
+
+    full_name: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=40)
+
+
+class UserRead(UserBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    organization_id: str | None
+    is_active: bool
+    must_change_password: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class UserCreated(BaseModel):
+    """Result of creating a user — includes the one-time temporary password."""
+
+    user: UserRead
+    temporary_password: str | None = None
+
+
+class PasswordResetResult(BaseModel):
+    """Result of an admin-triggered password reset."""
+
+    user_id: str
+    temporary_password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    """Self-service password change (clears the forced-change flag)."""
+
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=128)
