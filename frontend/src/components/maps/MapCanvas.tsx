@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import maplibregl, { type GeoJSONSource, type StyleSpecification } from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
+// maplibre-gl CSS is imported globally in src/index.css (avoids deferred chunk race).
 
 import type { AreasResponse, AreaProperties } from "@/types/maps";
 import { sampleMetric } from "@/types/maps";
@@ -24,8 +24,25 @@ const AREAS_GLOW = "agora-areas-glow";
 const AREAS_LINE = "agora-areas-line";
 
 const RASTER: Record<Basemap, { tiles: string[]; attribution: string; paint: Record<string, number> }> = {
-  dark: { tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], attribution: "© OpenStreetMap", paint: { "raster-saturation": -0.85, "raster-brightness-max": 0.85 } },
-  satellite: { tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"], attribution: "© Esri", paint: { "raster-saturation": 0 } },
+  // CARTO dark basemap: reliable CDN, CORS-enabled, already dark (no filter
+  // needed) — far more robust than OSM and on-theme for the command center.
+  dark: {
+    tiles: [
+      "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+      "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+      "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+      "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+    ],
+    attribution: "© OpenStreetMap © CARTO",
+    paint: {},
+  },
+  satellite: {
+    tiles: [
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    ],
+    attribution: "© Esri",
+    paint: {},
+  },
 };
 
 const styleFor = (b: Basemap): StyleSpecification => ({
@@ -109,6 +126,7 @@ export function MapCanvas({ areas, showAreas, wmsLayers = [], choropleth, basema
       attributionControl: { compact: true },
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    map.on("error", (e) => console.warn("[MapCanvas] map error:", e?.error?.message ?? e));
     mapRef.current = map;
     popupRef.current = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
 

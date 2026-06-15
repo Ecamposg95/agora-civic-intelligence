@@ -1,3 +1,7 @@
+/* MapLibre styles imported globally so the map canvas + controls are always
+   positioned/sized correctly (never a deferred per-chunk CSS race). */
+@import "maplibre-gl/dist/maplibre-gl.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
