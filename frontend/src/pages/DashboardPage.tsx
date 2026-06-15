@@ -7,6 +7,8 @@ import { getSources } from "@/api/sources";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { CoverageBars, type CoverageDatum } from "@/components/dashboards/CoverageBars";
 import { ParticipationChart } from "@/components/dashboards/ParticipationChart";
+import { Heatmap } from "@/components/charts/Heatmap";
+import { RadialGauge } from "@/components/charts/RadialGauge";
 import { MapCanvas } from "@/components/maps/MapCanvas";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -99,6 +101,24 @@ export function DashboardPage() {
   const s = data?.summary;
   const activity = data?.trends.activity ?? [];
   const activitySeries = useMemo(() => activity.map((p) => p.value), [activity]);
+
+  // Real audit-activity figures (no fabricated values).
+  const totalEvents = useMemo(
+    () => activity.reduce((acc, p) => acc + p.value, 0),
+    [activity],
+  );
+  const peakEvents = useMemo(
+    () => activity.reduce((m, p) => Math.max(m, p.value), 0),
+    [activity],
+  );
+  // Today's events relative to the busiest day in the 14d window.
+  const todayEvents = activity.length > 0 ? activity[activity.length - 1].value : 0;
+  const activityRatio = peakEvents > 0 ? todayEvents / peakEvents : 0;
+  const distinctActions = data?.by_action.length ?? 0;
+  const heatData = useMemo(
+    () => activity.map((p) => ({ label: p.period, value: p.value })),
+    [activity],
+  );
 
   const coverage: CoverageDatum[] = useMemo(() => {
     if (!areas) return [];
@@ -212,6 +232,83 @@ export function DashboardPage() {
           icon={<DatabaseIcon width={18} height={18} />}
           delay={240}
         />
+      </div>
+
+      {/* ---- Real audit pulse: gauge + extra KPIs + activity heatmap ---- */}
+      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="reveal" style={{ animationDelay: "120ms" }}>
+          <Card title="Pulso de actividad (hoy)" accentDot className="h-full">
+            <DataState
+              loading={overviewLoading}
+              error={overviewError}
+              onRetry={reloadOverview}
+              skeleton={
+                <div className="h-[150px] animate-pulse rounded-lg bg-panel-hover" />
+              }
+            >
+              {data && (
+                <div className="flex items-center gap-5">
+                  <RadialGauge value={activityRatio} label="vs. pico 14d" />
+                  <div className="space-y-1.5">
+                    <div className="eyebrow">Eventos hoy</div>
+                    <div className="font-display text-2xl font-bold tabular-nums text-ink">
+                      {nf.format(todayEvents)}
+                    </div>
+                    <div className="text-xs text-ink-faint">
+                      Pico diario: {nf.format(peakEvents)}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </DataState>
+          </Card>
+        </div>
+
+        <div className="reveal lg:col-span-2" style={{ animationDelay: "180ms" }}>
+          <Card
+            title="Resumen del audit trail (14d)"
+            accentDot
+            className="h-full"
+          >
+            <DataState
+              loading={overviewLoading}
+              error={overviewError}
+              onRetry={reloadOverview}
+              skeleton={
+                <div className="h-[150px] animate-pulse rounded-lg bg-panel-hover" />
+              }
+            >
+              {data && (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border border-line bg-bg-sunken px-3 py-3">
+                      <div className="eyebrow mb-1">Eventos 14d</div>
+                      <div className="font-display text-2xl font-bold tabular-nums text-accent">
+                        {nf.format(totalEvents)}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-line bg-bg-sunken px-3 py-3">
+                      <div className="eyebrow mb-1">Tipos de acción</div>
+                      <div className="font-display text-2xl font-bold tabular-nums text-teal">
+                        {nf.format(distinctActions)}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="eyebrow mb-2">Actividad diaria</div>
+                    {heatData.length > 0 ? (
+                      <Heatmap data={heatData} columns={7} />
+                    ) : (
+                      <p className="text-sm text-ink-faint">
+                        Sin actividad en la ventana.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </DataState>
+          </Card>
+        </div>
       </div>
 
       {/* ---- Activity chart + governance ---- */}
