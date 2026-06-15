@@ -20,6 +20,7 @@ interface MapCanvasProps {
 
 const AREAS_SOURCE = "agora-areas";
 const AREAS_FILL = "agora-areas-fill";
+const AREAS_GLOW = "agora-areas-glow";
 const AREAS_LINE = "agora-areas-line";
 
 const RASTER: Record<Basemap, { tiles: string[]; attribution: string; paint: Record<string, number> }> = {
@@ -47,11 +48,16 @@ function withMetric(fc: AreasResponse): GeoJSON.FeatureCollection {
 }
 
 const FLAT_FILL: maplibregl.FillLayerSpecification["paint"] = { "fill-color": "#4f9cff", "fill-opacity": 0.18 };
+// Punchy command-center ramp: deep navy → accent blue → bright cyan/white.
 const CHORO_FILL: maplibregl.FillLayerSpecification["paint"] = {
-  "fill-opacity": 0.6,
+  "fill-opacity": 0.62,
   "fill-color": [
     "interpolate", ["linear"], ["get", "metric"],
-    0.45, "#0d3b66", 0.68, "#4f9cff", 0.9, "#dcedff",
+    0.45, "#07172e",
+    0.58, "#0d3b66",
+    0.70, "#4f9cff",
+    0.82, "#2dd4bf",
+    0.90, "#eafbff",
   ] as never,
 };
 
@@ -82,7 +88,9 @@ export function MapCanvas({ areas, showAreas, wmsLayers = [], choropleth, basema
       readyRef.current = true;
       map.addSource(AREAS_SOURCE, { type: "geojson", data: EMPTY_FC as never });
       map.addLayer({ id: AREAS_FILL, type: "fill", source: AREAS_SOURCE, paint: FLAT_FILL });
-      map.addLayer({ id: AREAS_LINE, type: "line", source: AREAS_SOURCE, paint: { "line-color": "#2dd4bf", "line-width": 1.2 } });
+      // Soft teal glow underlay for the boundaries (blurred, low opacity).
+      map.addLayer({ id: AREAS_GLOW, type: "line", source: AREAS_SOURCE, paint: { "line-color": "#2dd4bf", "line-width": 3.5, "line-blur": 3, "line-opacity": 0.5 } });
+      map.addLayer({ id: AREAS_LINE, type: "line", source: AREAS_SOURCE, paint: { "line-color": "#7ff0e0", "line-width": 1.1, "line-opacity": 0.9 } });
 
       map.on("mousemove", AREAS_FILL, (e) => {
         map.getCanvas().style.cursor = "pointer";
@@ -122,6 +130,7 @@ export function MapCanvas({ areas, showAreas, wmsLayers = [], choropleth, basema
         map.setPaintProperty(AREAS_FILL, "fill-color", fill["fill-color"] as never);
         map.setPaintProperty(AREAS_FILL, "fill-opacity", fill["fill-opacity"] as never);
       }
+      if (map.getLayer(AREAS_GLOW)) map.setLayoutProperty(AREAS_GLOW, "visibility", vis);
       if (map.getLayer(AREAS_LINE)) map.setLayoutProperty(AREAS_LINE, "visibility", vis);
     };
     if (readyRef.current) apply(); else map.once("load", apply);
@@ -164,7 +173,7 @@ export function MapCanvas({ areas, showAreas, wmsLayers = [], choropleth, basema
   }, [fitKey]);
 
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-card border border-line">
+    <div className="relative h-full w-full overflow-hidden rounded-card border border-line-strong/60">
       <div ref={containerRef} className="absolute inset-0" />
     </div>
   );

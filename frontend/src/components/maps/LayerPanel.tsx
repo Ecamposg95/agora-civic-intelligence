@@ -1,4 +1,5 @@
 import type { LayerCategory, MapLayer } from "@/types/maps";
+import { LayersIcon } from "@/components/ui/icons";
 
 interface LayerPanelProps {
   layers: MapLayer[];
@@ -15,8 +16,10 @@ const CATEGORY_TAG: Record<LayerCategory, string> = {
 export function LayerPanel({ layers, onToggle, loading }: LayerPanelProps) {
   if (loading) {
     return (
-      <div className="panel h-full p-5">
-        <div className="mb-4 text-sm font-semibold text-ink">Data Layers</div>
+      <div className="card-premium h-full p-5">
+        <div className="mb-4 flex items-center gap-2 font-display text-sm font-semibold text-ink">
+          <LayersIcon className="h-4 w-4 text-accent" /> Data Layers
+        </div>
         {[0, 1, 2].map((i) => (
           <div
             key={i}
@@ -30,10 +33,12 @@ export function LayerPanel({ layers, onToggle, loading }: LayerPanelProps) {
   const active = layers.filter((l) => l.visible).length;
 
   return (
-    <div className="panel flex h-full flex-col overflow-y-auto p-5">
+    <div className="card-premium flex h-full flex-col overflow-y-auto p-5">
       <div className="mb-4 flex items-center justify-between">
-        <span className="text-sm font-semibold text-ink">Data Layers</span>
-        <span className="text-[11px] text-ink-faint">
+        <span className="flex items-center gap-2 font-display text-sm font-semibold text-ink">
+          <LayersIcon className="h-4 w-4 text-accent" /> Data Layers
+        </span>
+        <span className="metric-chip !rounded-pill border-line px-2 py-0.5 font-mono text-[10px] text-ink-muted">
           {active}/{layers.length} active
         </span>
       </div>
@@ -48,7 +53,11 @@ export function LayerPanel({ layers, onToggle, loading }: LayerPanelProps) {
         {layers.map((layer) => (
           <div
             key={layer.id}
-            className="flex items-center justify-between rounded-lg border border-line bg-bg-sunken px-3 py-2.5"
+            className={`flex items-center justify-between rounded-lg border bg-bg-sunken px-3 py-2.5 transition-all hover:-translate-y-0.5 hover:bg-panel-hover ${
+              layer.visible
+                ? "border-accent/40 shadow-glow-accent"
+                : "border-line hover:border-line-strong"
+            }`}
           >
             <div className="min-w-0">
               <div className="flex items-center gap-2">
