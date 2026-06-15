@@ -2,6 +2,8 @@ import { getOverview } from "@/api/analytics";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ParticipationChart } from "@/components/dashboards/ParticipationChart";
+import { Donut } from "@/components/charts/Donut";
+import { Heatmap } from "@/components/charts/Heatmap";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { Card } from "@/components/ui/Card";
 import { DataState } from "@/components/ui/DataState";
@@ -18,6 +20,12 @@ export function AnalyticsPage() {
   const activity = data?.trends.activity ?? [];
   const totalEvents = activity.reduce((acc, p) => acc + p.value, 0);
   const peakEvents = activity.reduce((max, p) => Math.max(max, p.value), 0);
+
+  const byAction = data?.by_action ?? [];
+  const byActor = data?.by_actor ?? [];
+  const actionData = byAction.map((a) => ({ name: a.action, value: a.count }));
+  const heatData = activity.map((p) => ({ label: p.period, value: p.value }));
+  const maxActor = byActor.reduce((m, a) => Math.max(m, a.count), 0) || 1;
 
   return (
     <AppLayout title="Activity Analytics" crumb="Operational Intelligence">
@@ -102,6 +110,111 @@ export function AnalyticsPage() {
             </div>
           </div>
         </Card>
+        </div>
+      </div>
+
+      {/* ---- Real audit breakdowns (by action / actor / activity heatmap) ---- */}
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="reveal" style={{ animationDelay: "120ms" }}>
+          <Card title="Eventos por acción" accentDot className="card-premium h-full">
+            <DataState
+              loading={loading}
+              error={error}
+              onRetry={reload}
+              isEmpty={!!data && actionData.length === 0}
+              emptyMessage="Sin eventos en la ventana."
+              skeleton={
+                <div className="h-[200px] animate-pulse rounded-lg bg-panel-hover" />
+              }
+            >
+              {data && (
+                <>
+                  <Donut data={actionData} height={200} />
+                  <ul className="mt-3 space-y-1.5">
+                    {byAction.slice(0, 6).map((a) => (
+                      <li
+                        key={a.action}
+                        className="flex items-center justify-between gap-3 text-sm"
+                      >
+                        <span className="truncate font-mono text-ink-muted">
+                          {a.action}
+                        </span>
+                        <span className="font-semibold tabular-nums text-ink">
+                          {a.count}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </DataState>
+          </Card>
+        </div>
+
+        <div className="reveal" style={{ animationDelay: "200ms" }}>
+          <Card title="Actores más activos" accentDot className="card-premium h-full">
+            <DataState
+              loading={loading}
+              error={error}
+              onRetry={reload}
+              isEmpty={!!data && byActor.length === 0}
+              emptyMessage="Sin actividad de actores en la ventana."
+              skeleton={
+                <div className="h-[200px] animate-pulse rounded-lg bg-panel-hover" />
+              }
+            >
+              {data && (
+                <ul className="space-y-3">
+                  {byActor.map((a) => (
+                    <li key={a.actor_id}>
+                      <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
+                        <span className="truncate font-mono text-ink-muted">
+                          {a.actor_id.slice(0, 12)}…
+                        </span>
+                        <span className="font-semibold tabular-nums text-ink">
+                          {a.count}
+                        </span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-pill bg-bg-sunken ring-1 ring-inset ring-white/5">
+                        <div
+                          className="h-full rounded-pill bg-accent-gradient shadow-glow-accent"
+                          style={{ width: `${(a.count / maxActor) * 100}%` }}
+                        />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </DataState>
+          </Card>
+        </div>
+
+        <div className="reveal" style={{ animationDelay: "280ms" }}>
+          <Card
+            title="Mapa de actividad (14d)"
+            accentDot
+            className="card-premium h-full"
+          >
+            <DataState
+              loading={loading}
+              error={error}
+              onRetry={reload}
+              isEmpty={!!data && heatData.length === 0}
+              emptyMessage="Sin actividad en la ventana."
+              skeleton={
+                <div className="h-[140px] animate-pulse rounded-lg bg-panel-hover" />
+              }
+            >
+              {data && (
+                <>
+                  <Heatmap data={heatData} columns={7} />
+                  <p className="mt-3 text-[11px] text-ink-faint">
+                    Intensidad relativa de eventos por día (audit trail).
+                  </p>
+                </>
+              )}
+            </DataState>
+          </Card>
         </div>
       </div>
     </AppLayout>
