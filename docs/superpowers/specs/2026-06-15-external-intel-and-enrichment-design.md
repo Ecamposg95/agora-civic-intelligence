@@ -8,7 +8,7 @@
 
 Two complementary thrusts, both approved by the user:
 
-1. **New intelligence modules** powered by additional external APIs (starting with token-free, reachable sources: **DataMéxico**, **World Bank**), behind a robust backend proxy, plus an economic layer on the map. Token-gated sources (INEGI, Banxico) are built as **preview now, pluggable later**.
+1. **New intelligence modules** powered by additional external sources (starting with token-free, reachable ones: **IEEM Numeralia** — confirmed real CSVs for Estado de México — plus **World Bank** and **DataMéxico**), behind a robust backend proxy, plus an economic layer on the map. Token-gated sources (INEGI, Banxico) are built as **preview now, pluggable later**.
 2. **Enrich the existing modules** — more KPIs, more chart types, denser "big-screen" detail so the platform looks **advanced, ostentatious, highly detailed** — while preserving the all-black command-center aesthetic and the project's honesty rule (real data where it exists, labelled sample otherwise).
 
 ## 2. Context (current state)
@@ -35,7 +35,15 @@ Chosen over per-module bespoke endpoints (B) and browser-direct fetch (C).
 
 **Feasibility note (verify first):** reachability of DataMéxico/World Bank from the Railway container must be probed during implementation (like the CARTO check) before claiming "real". World Bank (`api.worldbank.org/v2`, JSON, reliable, no token) is the safe anchor; DataMéxico (`api.datamexico.org` Tesseract OLAP) is higher-value but reachability/CORS/query-shape must be confirmed — if it fails, that module degrades to preview with the same UI.
 
+**IEEM Numeralia — CONFIRMED real source (added after analysis).** `https://dorganizacion.ieem.org.mx/numeralia/` publishes Estado de México electoral statistics as **stable, machine-readable CSV/XLSX** files (no token, no API/JSON needed). Verified live: `…/numeralia/docs/Municipios_EdoMex_2025.csv` returns a clean comma-delimited UTF-8 CSV (125 municipios; `MUNICIPIO,NOMBRE DEL MUNICIPIO`). Files follow `…/numeralia/docs/<Tema>_EdoMex_<año>.{csv,xlsx}`, one per topic, reachable from sub-pages (`municipios.php`, `distritos_locales.php`, `padron_electoral.php`, `casillas.php`, `secciones.php`). This is the **strongest confirmed real anchor for the electoral focus** and is promoted to Phase 1. (The companion **Mapoteca** at `…/mapoteca/` serves mostly PDF planos, not machine-readable geometry, and defers real geospatial data to INE **SIGE** `cartografia.ine.mx/sige8/…`, a JS SPA / WMS — harder; deferred to a later phase, tied to the existing `INE_SIGE_*` pending item.)
+
 ## 4. New modules
+
+### 4.0 Estado de México — Electoral (IEEM Numeralia) `(REAL via proxy; CONFIRMED reachable)` — Phase 1
+- Backend `backend/app/integrations/intel/ieem.py` + `/api/intel/ieem/{dataset}`: download the IEEM Numeralia CSVs server-side (avoids CORS), parse to JSON, normalize, and cache (TTL). Datasets: `municipios` (confirmed), `distritos_locales`, `distritos_federales`, `secciones`, `padron_lista_nominal`, `casillas` — each from its `…/numeralia/docs/<Tema>_EdoMex_<año>.csv`. First confirm each file's exact name/URL/columns by reading its sub-page (some are catalogs, some are statistic tables).
+- Frontend module "Estado de México — Electoral": KPI tiles (nº municipios/distritos/secciones, padrón, lista nominal — REAL), a searchable/sortable catalog table per dataset, and charts where the data supports it (e.g. padrón/lista nominal by district). Source + corte date shown ("Registro Federal de Electores, corte …").
+- Synergy: these real catalogs (125 municipios, 45 distritos) can also enrich **Territorios** (real Edomex administrative breakdown even before SIGE geometry lands).
+- Honesty: REAL data, attributed to IEEM/RFE with the corte date. Graceful `DataState` if IEEM is unreachable.
 
 ### 4.1 Economía Territorial — DataMéxico `(real via proxy; preview fallback)`
 - Backend `datamexico.py` + `/api/intel/datamexico/*`: economic indicators by entity (e.g. GDP, employment, trade, economic complexity).
@@ -85,10 +93,11 @@ Densify the existing modules with more KPIs and chart variety, in the all-black 
 
 Large — split into sequential implementation specs/plans:
 
-- **Phase 1 (this spec's first plan): Proxy framework + World Bank module + chart primitives + real Analytics/Dashboard enrichment.** Highest-certainty real value (World Bank reliable; audit aggregations real). Establishes the chart library reused everywhere.
+- **Phase 1 (this spec's first plan): Proxy framework + IEEM Numeralia (REAL, confirmed) + World Bank module + chart primitives + real Analytics/Dashboard enrichment.** Highest-certainty real value (IEEM CSVs confirmed reachable + machine-readable; World Bank reliable; audit aggregations real). Establishes the proxy + chart library reused everywhere.
 - **Phase 2: DataMéxico module + economic map layer** (after reachability probe).
 - **Phase 3: Enrich Resultados/Padrón previews + token-gated preview modules (INEGI/DENUE/Banxico).**
-- **Phase 4: Índice Cívico-Territorial** (own spec).
+- **Phase 4: IEEM Mapoteca / INE SIGE real geometry (shapefiles/WMS) → real Edomex cartography in Territorios/Map** (ties to the `INE_SIGE_*` pending item).
+- **Phase 5: Índice Cívico-Territorial** (own spec).
 
 Each phase is independently deployable.
 
