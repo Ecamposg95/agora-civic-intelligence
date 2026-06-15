@@ -9,6 +9,7 @@ import {
   type ModuleDef,
 } from "@/modules/registry";
 import { useAuthStore } from "@/store/authStore";
+import type { UserRole } from "@/types/auth";
 
 const navItem =
   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors";
@@ -17,7 +18,8 @@ const sectionLabel =
 
 function visibleFor(role: string | undefined, m: ModuleDef): boolean {
   if (!m.roles) return true;
-  return !!role && m.roles.includes(role as never);
+  if (!role) return false;
+  return m.roles.includes(role as UserRole);
 }
 
 export function Sidebar() {

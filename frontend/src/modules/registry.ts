@@ -1,5 +1,6 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 
+import type { UserRole } from "@/types/auth";
 import {
   AiIcon,
   AlertIcon,
@@ -36,7 +37,7 @@ export interface ModuleDef {
   icon: ComponentType<{ width?: number; height?: number; className?: string }>;
   state: ModuleState;
   /** Restrict to roles; omit = any authenticated user. */
-  roles?: ("superadmin" | "admin" | "analyst" | "viewer")[];
+  roles?: UserRole[];
   /** Component for active/preview modules. soon → ComingSoonPage. */
   element?: LazyExoticComponent<ComponentType>;
   /** End-match for the index route. */
