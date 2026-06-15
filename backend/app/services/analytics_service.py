@@ -65,22 +65,36 @@ def get_overview(db: Session, ctx: TenantContext) -> dict[str, Any]:
     start = (now - timedelta(days=ACTIVITY_WINDOW_DAYS - 1)).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
-    act_stmt = select(AuditLog.created_at).where(AuditLog.created_at >= start)
+    detail_stmt = select(
+        AuditLog.created_at, AuditLog.action, AuditLog.actor_id
+    ).where(AuditLog.created_at >= start)
     if not ctx.is_superadmin:
-        act_stmt = act_stmt.where(AuditLog.organization_id == ctx.organization_id)
+        detail_stmt = detail_stmt.where(
+            AuditLog.organization_id == ctx.organization_id
+        )
 
     buckets: dict[str, int] = {
         (start + timedelta(days=i)).date().isoformat(): 0
         for i in range(ACTIVITY_WINDOW_DAYS)
     }
+    from collections import Counter
+
+    action_counts: Counter[str] = Counter()
+    actor_counts: Counter[str] = Counter()
     total_events = 0
-    for created_at in db.execute(act_stmt).scalars().all():
+    for created_at, action, actor_id in db.execute(detail_stmt).all():
         total_events += 1
         key = created_at.date().isoformat()
         if key in buckets:
             buckets[key] += 1
+        action_counts[action] += 1
+        if actor_id:
+            actor_counts[actor_id] += 1
+
     # period as MM-DD for a compact axis label
     activity = [{"period": day[5:], "value": count} for day, count in buckets.items()]
+    by_action = [{"action": a, "count": c} for a, c in action_counts.most_common(8)]
+    by_actor = [{"actor_id": a, "count": c} for a, c in actor_counts.most_common(5)]
 
     # --- Governance alerts derived from real state --------------------------
     alerts: list[dict[str, str]] = []
@@ -121,6 +135,8 @@ def get_overview(db: Session, ctx: TenantContext) -> dict[str, Any]:
         },
         "coverage": coverage,
         "trends": {"activity": activity},
+        "by_action": by_action,
+        "by_actor": by_actor,
         "alerts": alerts,
         "generated_at": now.isoformat(),
     }

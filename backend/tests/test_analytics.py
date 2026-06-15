@@ -32,3 +32,16 @@ def test_overview_returns_real_tenant_scoped_metrics(client):
     assert isinstance(body["coverage"], list)
     assert len(body["alerts"]) >= 1
     assert "generated_at" in body
+
+
+def test_overview_includes_breakdowns(client):
+    from .conftest import auth_headers
+    # generate a couple of audit events (logins)
+    auth_headers(client, "admin@alpha.gov")
+    headers = auth_headers(client, "admin@alpha.gov")
+    body = client.get("/api/analytics/overview", headers=headers).json()
+    assert "by_action" in body and isinstance(body["by_action"], list)
+    assert all({"action", "count"} <= set(x) for x in body["by_action"])
+    assert "by_actor" in body and isinstance(body["by_actor"], list)
+    # at least the auth.login action present
+    assert any(x["action"] == "auth.login" for x in body["by_action"])

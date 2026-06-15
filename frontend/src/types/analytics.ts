@@ -22,6 +22,8 @@ export interface AnalyticsOverview {
   trends: {
     activity: TrendPoint[];
   };
+  by_action: { action: string; count: number }[];
+  by_actor: { actor_id: string; count: number }[];
   alerts: AnalyticsAlert[];
   generated_at: string;
 }
