@@ -242,7 +242,7 @@ export function MapExplorerPage() {
           </div>
 
           {/* Map frame with inner vignette + accent hairline (static — no hover lift) */}
-          <div className="relative min-h-[520px] flex-1 overflow-hidden rounded-card border border-line-strong bg-panel p-0 shadow-panel">
+          <div className="relative h-[600px] overflow-hidden rounded-card border border-line-strong bg-panel p-0 shadow-panel">
             <div className="relative h-full w-full">
               <MapCanvas
                 key={basemap}
