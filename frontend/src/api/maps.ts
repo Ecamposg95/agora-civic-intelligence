@@ -6,7 +6,9 @@ export async function getLayers(): Promise<LayersResponse> {
   return data;
 }
 
-export async function getAreas(): Promise<AreasResponse> {
-  const { data } = await apiClient.get<AreasResponse>("/maps/areas");
+export async function getAreas(level?: string): Promise<AreasResponse> {
+  const { data } = await apiClient.get<AreasResponse>("/maps/areas", {
+    params: level ? { level } : undefined,
+  });
   return data;
 }
