@@ -1,8 +1,13 @@
 """IEEM (Instituto Electoral del Estado de México) Numeralia — real CSV datasets.
 
 Files are stable CSV downloads (no token, no API). We fetch bytes server-side
-(avoids CORS) and parse with the stdlib csv module. Add datasets here as their
-exact file names are confirmed from the numeralia sub-pages.
+(avoids CORS) and parse with the stdlib csv module. The real files are NOT clean
+header-first tables: they carry decorative title/preamble rows (e.g. "INSTITUTO
+ELECTORAL DEL ESTADO DE MÉXICO", "MUNICIPIOS") and are encoded in Windows-1252.
+
+For "numbered catalog" datasets (a sequential 1..N list) we skip the preamble by
+keeping only rows whose first cell is an integer and apply configured column
+names. Add datasets here as their exact file names/shapes are confirmed.
 """
 
 from __future__ import annotations
@@ -16,10 +21,16 @@ from app.integrations.ine.base import get_bytes
 BASE = "https://dorganizacion.ieem.org.mx/numeralia/docs"
 SOURCE = "IEEM Numeralia — Registro Federal de Electores (Estado de México)"
 
-# key -> (label, filename). Confirmed: municipios. Others to confirm at impl time
-# by reading the sub-pages; municipios is the verified working case.
-DATASETS: dict[str, dict[str, str]] = {
-    "municipios": {"label": "Catálogo de municipios", "file": "Municipios_EdoMex_2025.csv"},
+# key -> { label, file, kind, columns }
+#   kind="numbered": keep rows whose first cell is an integer, map to `columns`.
+#   kind="table"   : generic header-first CSV.
+DATASETS: dict[str, dict[str, Any]] = {
+    "municipios": {
+        "label": "Catálogo de municipios",
+        "file": "Municipios_EdoMex_2025.csv",
+        "kind": "numbered",
+        "columns": ["Clave", "Municipio"],
+    },
 }
 
 
@@ -38,16 +49,36 @@ def _decode(raw: bytes) -> str:
     return raw.decode("latin-1", errors="replace")
 
 
-def _parse_csv(raw: bytes) -> tuple[list[str], list[dict[str, str]]]:
-    text = _decode(raw)  # handle BOM + non-UTF-8 (Windows-1252) encodings
-    reader = csv.reader(io.StringIO(text))
-    rows = [r for r in reader if any(cell.strip() for cell in r)]
+def _read_rows(raw: bytes) -> list[list[str]]:
+    """Decode + CSV-split into non-empty rows of stripped cells."""
+    reader = csv.reader(io.StringIO(_decode(raw)))
+    return [
+        [c.strip() for c in r]
+        for r in reader
+        if any(cell.strip() for cell in r)
+    ]
+
+
+def _parse_numbered(
+    rows: list[list[str]], columns: list[str]
+) -> list[dict[str, str]]:
+    """Keep only the numbered data rows (first cell is an integer), dropping
+    title/preamble rows, and map each to the configured column names."""
+    out: list[dict[str, str]] = []
+    for r in rows:
+        if r and r[0].isdigit():
+            out.append({columns[i]: (r[i] if i < len(r) else "") for i in range(len(columns))})
+    return out
+
+
+def _parse_table(rows: list[list[str]]) -> tuple[list[str], list[dict[str, str]]]:
     if not rows:
         return [], []
-    header = [h.strip() for h in rows[0]]
-    out: list[dict[str, str]] = []
-    for r in rows[1:]:
-        out.append({header[i]: (r[i].strip() if i < len(r) else "") for i in range(len(header))})
+    header = rows[0]
+    out = [
+        {header[i]: (r[i] if i < len(r) else "") for i in range(len(header))}
+        for r in rows[1:]
+    ]
     return header, out
 
 
@@ -59,13 +90,20 @@ def fetch_dataset(
     meta = DATASETS[key]
     url = f"{BASE}/{meta['file']}"
     fetcher = fetch or (lambda u: get_bytes(u))
-    columns, rows = _parse_csv(fetcher(url))
+    rows = _read_rows(fetcher(url))
+
+    if meta.get("kind") == "numbered":
+        columns = list(meta["columns"])
+        data = _parse_numbered(rows, columns)
+    else:
+        columns, data = _parse_table(rows)
+
     return {
         "key": key,
         "label": meta["label"],
         "columns": columns,
-        "rows": rows,
-        "count": len(rows),
+        "rows": data,
+        "count": len(data),
         "source": SOURCE,
         "url": url,
     }
