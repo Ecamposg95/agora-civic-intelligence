@@ -7,34 +7,61 @@ export function ComingSoonPage({ module }: { module: ModuleDef }) {
   const soon = module.soon;
   return (
     <AppLayout title={module.label} crumb="Próximamente">
-      <div className="mb-6 flex items-start gap-4">
-        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-accent/15 text-accent">
-          <Icon width={24} height={24} />
+      {/* ---- Hero ---- */}
+      <section className="relative mb-7 overflow-hidden">
+        <div className="aura -left-16 -top-24 h-72 w-72" aria-hidden="true" />
+        <div className="aura aura-teal right-0 -top-16 h-64 w-64" aria-hidden="true" />
+
+        <div className="reveal relative flex items-start gap-5">
+          <span className="metric-chip h-14 w-14 shrink-0 text-accent shadow-glow-accent">
+            <Icon width={26} height={26} />
+          </span>
+          <div className="min-w-0">
+            <div className="eyebrow">Módulo en desarrollo</div>
+            <h1 className="mt-2 flex flex-wrap items-center gap-3 font-display text-3xl font-bold leading-[1.05] tracking-tight md:text-4xl">
+              <span className="text-gradient">{module.label}</span>
+              <span className="pill border-teal/30 bg-teal/10 text-teal">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-pulse-glow rounded-full bg-teal" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-teal" />
+                </span>
+                Pronto
+              </span>
+            </h1>
+            {soon?.summary && (
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink-muted">
+                {soon.summary}
+              </p>
+            )}
+          </div>
         </div>
-        <div>
-          <div className="eyebrow">Módulo en desarrollo</div>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink">
-            {module.label}
-            <span className="ml-3 pill border-teal/30 bg-teal/10 text-teal align-middle">Pronto</span>
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-ink-muted">{soon?.summary}</p>
-        </div>
-      </div>
+      </section>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card title="Capacidades previstas">
-          <ul className="space-y-2">
-            {soon?.features.map((f) => (
-              <li key={f} className="flex items-start gap-2.5 rounded-lg border border-line bg-bg-sunken px-3 py-2.5 text-sm text-ink">
-                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                {f}
-              </li>
-            ))}
-          </ul>
-        </Card>
-        <Card title="Fuente de datos prevista">
-          <p className="text-sm leading-relaxed text-ink-muted">{soon?.dataSource}</p>
-        </Card>
+        <div className="reveal" style={{ animationDelay: "120ms" }}>
+          <Card title="Capacidades previstas" accentDot className="h-full">
+            <ul className="space-y-2.5">
+              {soon?.features.map((f, i) => (
+                <li
+                  key={f}
+                  className="reveal group flex items-start gap-2.5 rounded-lg border border-line bg-bg-sunken px-3 py-2.5 text-sm text-ink transition-all hover:-translate-y-0.5 hover:border-line-strong hover:bg-panel-hover"
+                  style={{ animationDelay: `${180 + i * 60}ms` }}
+                >
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-gradient shadow-glow transition-transform group-hover:scale-125" />
+                  {f}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </div>
+
+        <div className="reveal" style={{ animationDelay: "200ms" }}>
+          <Card title="Fuente de datos prevista" accentDot className="h-full">
+            <div className="rounded-lg border border-line bg-bg-sunken px-4 py-3.5">
+              <p className="text-sm leading-relaxed text-ink-muted">{soon?.dataSource}</p>
+            </div>
+          </Card>
+        </div>
       </div>
     </AppLayout>
   );

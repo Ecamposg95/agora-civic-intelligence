@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 
 import { getAudit } from "@/api/audit";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { MetricCard } from "@/components/ui/MetricCard";
-import { ShieldIcon } from "@/components/ui/icons";
+import { DatabaseIcon, LayersIcon, SearchIcon, ShieldIcon } from "@/components/ui/icons";
 import type { AuditPage } from "@/types/audit";
 
 const PAGE = 20;
@@ -49,75 +50,103 @@ export function AuditoriaPage() {
 
   return (
     <AppLayout title="Auditoría & Cumplimiento" crumb="Gobernanza">
-      <div className="mb-6">
-        <div className="eyebrow">Gobernanza de datos</div>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink">
-          Auditoría & Cumplimiento
-        </h1>
-        <p className="mt-1 max-w-xl text-sm text-ink-muted">
-          Bitácora inmutable de acciones sensibles, con alcance por organización.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Gobernanza de datos"
+        title="Auditoría &"
+        accent="Cumplimiento"
+        subtitle="Bitácora inmutable de acciones sensibles, con alcance por organización."
+      />
 
       {error && (
-        <div className="mb-4 rounded-lg border border-state-critical/40 bg-state-critical/10 px-3 py-2 text-sm text-state-critical">
+        <div className="reveal mb-4 rounded-lg border border-state-critical/40 bg-state-critical/10 px-3 py-2 text-sm text-state-critical">
           {error}
         </div>
       )}
 
-      <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <MetricCard label="Eventos totales" value={data ? String(data.total) : "—"} icon={<ShieldIcon width={18} height={18} />} />
-        <MetricCard label="Trazabilidad" value="Inmutable" />
-        <MetricCard label="Alcance" value="Tenant-scoped" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <MetricCard
+          label="Eventos totales"
+          value={data ? String(data.total) : "—"}
+          countTo={data ? data.total : undefined}
+          tone="accent"
+          icon={<ShieldIcon width={18} height={18} />}
+          delay={0}
+        />
+        <MetricCard
+          label="Trazabilidad"
+          value="Inmutable"
+          tone="teal"
+          icon={<LayersIcon width={18} height={18} />}
+          delay={80}
+        />
+        <MetricCard
+          label="Alcance"
+          value="Tenant-scoped"
+          tone="accent"
+          icon={<DatabaseIcon width={18} height={18} />}
+          delay={160}
+        />
       </div>
 
-      <Card
-        title="Bitácora"
-        action={
-          <input
-            value={actionInput}
-            onChange={(e) => setActionInput(e.target.value)}
-            placeholder="Filtrar por acción…"
-            className="rounded-lg border border-line bg-bg-sunken px-3 py-1.5 text-sm text-ink placeholder:text-ink-faint"
-          />
-        }
-      >
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs uppercase tracking-wide text-ink-faint">
-                <th className="px-2 py-2">Fecha</th>
-                <th className="px-2 py-2">Acción</th>
-                <th className="px-2 py-2">Entidad</th>
-                <th className="px-2 py-2">Actor</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr><td colSpan={4} className="px-2 py-6 text-center text-ink-faint">Cargando…</td></tr>
-              )}
-              {!loading && items.map((e) => (
-                <tr key={e.id} className="border-t border-line">
-                  <td className="px-2 py-2 text-ink-muted">{new Date(e.created_at).toLocaleString()}</td>
-                  <td className="px-2 py-2"><span className="pill border-accent/30 bg-accent/10 text-accent">{e.action}</span></td>
-                  <td className="px-2 py-2 text-ink-muted">{e.entity_type ?? "—"}</td>
-                  <td className="px-2 py-2 text-ink-faint">{e.actor_id ? e.actor_id.slice(0, 8) : "system"}</td>
+      <div className="reveal mt-5" style={{ animationDelay: "200ms" }}>
+        <Card
+          title="Bitácora"
+          accentDot
+          className="!p-0 overflow-hidden"
+          action={
+            <div className="relative">
+              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
+              <input
+                value={actionInput}
+                onChange={(e) => setActionInput(e.target.value)}
+                placeholder="Filtrar por acción…"
+                className="field-input w-auto pl-9"
+              />
+            </div>
+          }
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line bg-bg-sunken/60 text-left font-mono text-[11px] uppercase tracking-wider text-ink-faint">
+                  <th className="px-4 py-3 font-medium">Fecha</th>
+                  <th className="px-4 py-3 font-medium">Acción</th>
+                  <th className="px-4 py-3 font-medium">Entidad</th>
+                  <th className="px-4 py-3 font-medium">Actor</th>
                 </tr>
-              ))}
-              {!loading && items.length === 0 && (
-                <tr><td colSpan={4} className="px-2 py-6 text-center text-ink-faint">Sin eventos.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="mt-4 flex items-center justify-between text-sm text-ink-muted">
-          <span>{data ? `${offset + 1}–${Math.min(offset + PAGE, data.total)} de ${data.total}` : ""}</span>
-          <div className="flex gap-2">
-            <button disabled={loading || offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))} className="pill border-line disabled:opacity-40">Anterior</button>
-            <button disabled={loading || !data || offset + PAGE >= data.total} onClick={() => setOffset(offset + PAGE)} className="pill border-line disabled:opacity-40">Siguiente</button>
+              </thead>
+              <tbody>
+                {loading && (
+                  <tr><td colSpan={4} className="px-4 py-10 text-center text-ink-faint">Cargando…</td></tr>
+                )}
+                {!loading && items.map((e) => (
+                  <tr
+                    key={e.id}
+                    className="border-b border-line/60 transition-colors last:border-0 hover:bg-panel-hover/50"
+                  >
+                    <td className="px-4 py-3 font-mono text-xs tabular-nums text-ink-muted">
+                      {new Date(e.created_at).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3"><span className="pill border-accent/30 bg-accent/10 font-mono text-accent">{e.action}</span></td>
+                    <td className="px-4 py-3 text-ink-muted">{e.entity_type ?? "—"}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-ink-faint">{e.actor_id ? e.actor_id.slice(0, 8) : "system"}</td>
+                  </tr>
+                ))}
+                {!loading && items.length === 0 && (
+                  <tr><td colSpan={4} className="px-4 py-10 text-center text-ink-faint">Sin eventos.</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        </div>
-      </Card>
+          <div className="flex items-center justify-between border-t border-line px-4 py-3 text-sm text-ink-muted">
+            <span className="font-mono text-xs">{data ? `${offset + 1}–${Math.min(offset + PAGE, data.total)} de ${data.total}` : ""}</span>
+            <div className="flex gap-2">
+              <button disabled={loading || offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))} className="pill border-line disabled:opacity-40">Anterior</button>
+              <button disabled={loading || !data || offset + PAGE >= data.total} onClick={() => setOffset(offset + PAGE)} className="pill border-line disabled:opacity-40">Siguiente</button>
+            </div>
+          </div>
+        </Card>
+      </div>
     </AppLayout>
   );
 }
