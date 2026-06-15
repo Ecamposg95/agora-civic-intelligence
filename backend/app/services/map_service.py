@@ -53,20 +53,35 @@ def _level_value(level: Any) -> str:
 
 
 def list_areas_geojson(
-    db: Session, organization_id: str | None, level: str | None = None
+    db: Session,
+    organization_id: str | None,
+    level: str | None = None,
+    simplify: float = 0.0,
 ) -> dict[str, Any]:
-    """Return tenant-scoped electoral areas as a GeoJSON FeatureCollection."""
+    """Return tenant-scoped electoral areas as a GeoJSON FeatureCollection.
+
+    ``simplify`` > 0 applies ``ST_SimplifyPreserveTopology`` (tolerance in SRID
+    4326 degrees) to shrink the payload (e.g. the ~1854-municipio layer). Output
+    coordinates are emitted at 5 decimals (~1 m) regardless. ``ST_CollectionExtract``
+    first normalizes any GeometryCollection to a MultiPolygon so simplification
+    never fails on mixed geometries.
+    """
     dialect = db.bind.dialect.name if db.bind is not None else ""
     features: list[dict[str, Any]] = []
 
     if dialect == "postgresql":
+        geom = ElectoralArea.geometry
+        if simplify and simplify > 0:
+            geom = func.ST_SimplifyPreserveTopology(
+                func.ST_CollectionExtract(ElectoralArea.geometry, 3), simplify
+            )
         stmt = select(
             ElectoralArea.id,
             ElectoralArea.name,
             ElectoralArea.code,
             ElectoralArea.level,
             ElectoralArea.organization_id,
-            func.ST_AsGeoJSON(ElectoralArea.geometry),
+            func.ST_AsGeoJSON(geom, 5),
         ).where(ElectoralArea.deleted_at.is_(None))
         if organization_id is not None:
             stmt = stmt.where(ElectoralArea.organization_id == organization_id)
