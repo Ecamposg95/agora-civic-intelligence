@@ -104,6 +104,14 @@ const Territorios = lazy(() =>
     default: m.TerritoriosPage,
   })),
 );
+const Ieem = lazy(() =>
+  import("@/modules/ieem/IeemPage").then((m) => ({ default: m.IeemPage })),
+);
+const WorldBank = lazy(() =>
+  import("@/modules/worldbank/WorldBankPage").then((m) => ({
+    default: m.WorldBankPage,
+  })),
+);
 
 export const MODULES: ModuleDef[] = [
   // Plataforma (active)
@@ -124,6 +132,8 @@ export const MODULES: ModuleDef[] = [
     },
   },
   { key: "territorios", path: "/territorios", label: "Territorios & Secciones", section: "inteligencia", icon: LayersIcon, state: "active", element: Territorios },
+  { key: "ieem", path: "/ieem", label: "Estado de México (IEEM)", section: "inteligencia", icon: AnalyticsIcon, state: "active", element: Ieem },
+  { key: "worldbank", path: "/indicadores", label: "Indicadores Nacionales", section: "inteligencia", icon: AnalyticsIcon, state: "active", element: WorldBank },
 
   // Ciudadanía
   { key: "ai-analyst", path: "/ai-analyst", label: "AI Analyst / Copiloto", section: "ciudadania", icon: AiIcon, state: "preview", element: AiAnalyst },
