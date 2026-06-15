@@ -15,6 +15,7 @@ from app.core.security import hash_password
 from app.database import Base, get_db
 from app.main import app
 from app.models.audit_log import AuditLog
+from app.models.electoral_area import ElectoralArea
 from app.models.organization import Organization
 from app.models.user import User, UserRole
 
@@ -27,10 +28,16 @@ TestingSessionLocal = sessionmaker(
     bind=engine, autoflush=False, autocommit=False, expire_on_commit=False
 )
 
-# Create only the PostGIS-free tables needed for these tests.
+# Create only the PostGIS-free tables needed for these tests. ElectoralArea's
+# geometry column degrades to Text on SQLite, so its table is create_all-safe.
 Base.metadata.create_all(
     engine,
-    tables=[Organization.__table__, User.__table__, AuditLog.__table__],
+    tables=[
+        Organization.__table__,
+        User.__table__,
+        AuditLog.__table__,
+        ElectoralArea.__table__,
+    ],
 )
 
 

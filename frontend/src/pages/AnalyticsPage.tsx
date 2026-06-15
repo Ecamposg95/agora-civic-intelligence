@@ -17,15 +17,16 @@ export function AnalyticsPage() {
   }, []);
 
   return (
-    <AppLayout title="Participation Analytics" crumb="Civic Engagement">
+    <AppLayout title="Activity Analytics" crumb="Operational Intelligence">
       <div className="mb-6">
-        <div className="eyebrow">Engagement intelligence</div>
+        <div className="eyebrow">Operational intelligence</div>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink">
-          Participation Analytics
+          Activity Analytics
         </h1>
         <p className="mt-1 max-w-xl text-sm text-ink-muted">
-          Longitudinal analysis of civic participation across territories and
-          electoral cycles, governed for privacy and auditability.
+          Tenant-scoped platform activity from the audit trail. Civic
+          participation series will appear here as padrón and PREP pipelines are
+          onboarded.
         </p>
       </div>
 
@@ -36,9 +37,14 @@ export function AnalyticsPage() {
       )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card title="Participation by quarter">
+        <Card title="Eventos por día (últimos 14 días)">
           {data ? (
-            <ParticipationChart data={data.trends.participation} height={260} />
+            <ParticipationChart
+              data={data.trends.activity}
+              height={260}
+              valueFormat="number"
+              seriesLabel="Eventos"
+            />
           ) : (
             <div className="h-[260px] animate-pulse rounded-lg bg-panel-hover" />
           )}
@@ -46,10 +52,9 @@ export function AnalyticsPage() {
 
         <Card title="Methodology & governance">
           <p className="text-sm leading-relaxed text-ink-muted">
-            Metrics are aggregated from governed electoral datasets. Individual
-            records are never exposed; all access is audit-logged and
-            tenant-scoped. Replace this placeholder series with live pipelines as
-            data sources are onboarded.
+            Metrics are aggregated live from the database and are tenant-scoped.
+            Individual records are never exposed; all access is audit-logged. The
+            activity series is built from the audit trail.
           </p>
           <div className="mt-4 space-y-2">
             <div className="flex items-center justify-between rounded-lg border border-line bg-bg-sunken px-3 py-2.5">

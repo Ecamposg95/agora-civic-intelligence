@@ -1,8 +1,8 @@
 export interface AnalyticsSummary {
-  registered_voters: number;
   electoral_areas: number;
-  active_institutions: number;
-  participation_rate: number;
+  organizations: number;
+  users: number;
+  data_sources: number;
 }
 
 export interface TrendPoint {
@@ -18,8 +18,10 @@ export interface AnalyticsAlert {
 
 export interface AnalyticsOverview {
   summary: AnalyticsSummary;
+  coverage: { level: string; count: number }[];
   trends: {
-    participation: TrendPoint[];
+    activity: TrendPoint[];
   };
   alerts: AnalyticsAlert[];
+  generated_at: string;
 }

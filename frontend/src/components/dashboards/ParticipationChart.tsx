@@ -13,11 +13,21 @@ import type { TrendPoint } from "@/types/analytics";
 interface ParticipationChartProps {
   data: TrendPoint[];
   height?: number;
+  /** "number" renders integer counts; "percent" renders 0–1 ratios as %. */
+  valueFormat?: "number" | "percent";
+  seriesLabel?: string;
 }
 
-const pct = (v: number) => `${(v * 100).toFixed(0)}%`;
+const fmtPct = (v: number) => `${(v * 100).toFixed(0)}%`;
+const fmtNum = (v: number) => `${v}`;
 
-export function ParticipationChart({ data, height = 220 }: ParticipationChartProps) {
+export function ParticipationChart({
+  data,
+  height = 220,
+  valueFormat = "number",
+  seriesLabel = "Eventos",
+}: ParticipationChartProps) {
+  const fmt = valueFormat === "percent" ? fmtPct : fmtNum;
   return (
     <div style={{ width: "100%", height }}>
       <ResponsiveContainer width="100%" height="100%">
@@ -41,8 +51,9 @@ export function ParticipationChart({ data, height = 220 }: ParticipationChartPro
             tick={{ fontSize: 12 }}
             tickLine={false}
             axisLine={false}
-            tickFormatter={pct}
+            tickFormatter={fmt}
             domain={[0, "auto"]}
+            allowDecimals={false}
           />
           <Tooltip
             cursor={{ stroke: "#2a3a5c", strokeWidth: 1 }}
@@ -54,7 +65,7 @@ export function ParticipationChart({ data, height = 220 }: ParticipationChartPro
               fontSize: 12,
             }}
             labelStyle={{ color: "#9fb0cc" }}
-            formatter={(value: number) => [pct(value), "Participation"]}
+            formatter={(value: number) => [fmt(value), seriesLabel]}
           />
           <Area
             type="monotone"

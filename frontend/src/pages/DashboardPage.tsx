@@ -13,18 +13,16 @@ import { Card } from "@/components/ui/Card";
 import { MetricCard } from "@/components/ui/MetricCard";
 import {
   AlertIcon,
-  AnalyticsIcon,
   DatabaseIcon,
   LayersIcon,
   ShieldIcon,
-  VotersIcon,
+  UserIcon,
 } from "@/components/ui/icons";
 import type { AnalyticsAlert, AnalyticsOverview } from "@/types/analytics";
 import type { AreasResponse } from "@/types/maps";
 import type { SourceInfo } from "@/types/sources";
 
 const nf = new Intl.NumberFormat("en-US");
-const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
 
 const ALERT_STYLE: Record<AnalyticsAlert["level"], string> = {
   info: "border-accent/30 bg-accent/10 text-accent",
@@ -95,38 +93,39 @@ export function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Registered voters"
-          value={s ? nf.format(s.registered_voters) : "—"}
-          delta="+1.2% vs Q3"
-          icon={<VotersIcon width={18} height={18} />}
-        />
-        <MetricCard
-          label="Electoral areas"
+          label="Áreas electorales"
           value={s ? nf.format(s.electoral_areas) : "—"}
-          delta="12 new"
           icon={<LayersIcon width={18} height={18} />}
         />
         <MetricCard
-          label="Participation rate"
-          value={s ? pct(s.participation_rate) : "—"}
-          delta="+1.0 pts"
-          icon={<AnalyticsIcon width={18} height={18} />}
+          label="Instituciones"
+          value={s ? nf.format(s.organizations) : "—"}
+          icon={<ShieldIcon width={18} height={18} />}
         />
         <MetricCard
-          label="Active institutions"
-          value={s ? nf.format(s.active_institutions) : "—"}
-          icon={<ShieldIcon width={18} height={18} />}
+          label="Usuarios activos"
+          value={s ? nf.format(s.users) : "—"}
+          icon={<UserIcon width={18} height={18} />}
+        />
+        <MetricCard
+          label="Fuentes de datos"
+          value={s ? nf.format(s.data_sources) : "—"}
+          icon={<DatabaseIcon width={18} height={18} />}
         />
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card
-          title="Participation trend"
+          title="Actividad de la plataforma"
           className="lg:col-span-2"
-          action={<span className="pill border-line text-ink-muted">Quarterly</span>}
+          action={<span className="pill border-line text-ink-muted">Últimos 14 días</span>}
         >
           {data ? (
-            <ParticipationChart data={data.trends.participation} />
+            <ParticipationChart
+              data={data.trends.activity}
+              valueFormat="number"
+              seriesLabel="Eventos"
+            />
           ) : (
             <div className="h-[220px] animate-pulse rounded-lg bg-panel-hover" />
           )}
