@@ -10,8 +10,10 @@ import { ParticipationChart } from "@/components/dashboards/ParticipationChart";
 import { MapCanvas } from "@/components/maps/MapCanvas";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { DataState } from "@/components/ui/DataState";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { Sparkline } from "@/components/ui/Sparkline";
+import { useAsync } from "@/hooks/useAsync";
 import {
   AlertIcon,
   DatabaseIcon,
@@ -72,16 +74,17 @@ function relativeTime(iso: string | undefined): string {
 }
 
 export function DashboardPage() {
-  const [data, setData] = useState<AnalyticsOverview | null>(null);
+  const {
+    data,
+    loading: overviewLoading,
+    error: overviewError,
+    reload: reloadOverview,
+  } = useAsync<AnalyticsOverview>(() => getOverview(), []);
   const [areas, setAreas] = useState<AreasResponse | null>(null);
   const [sources, setSources] = useState<SourceInfo[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [fitKey, setFitKey] = useState(0);
 
   useEffect(() => {
-    getOverview()
-      .then(setData)
-      .catch((e) => setError(e.message));
     getAreas()
       .then((fc) => {
         setAreas(fc);
@@ -175,12 +178,6 @@ export function DashboardPage() {
         </div>
       </section>
 
-      {error && (
-        <div className="reveal mb-5 rounded-lg border border-state-critical/40 bg-state-critical/10 px-3 py-2 text-sm text-state-critical">
-          {error}
-        </div>
-      )}
-
       {/* ---- KPI row (animated counters, real values, no fabricated trends) ---- */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
@@ -231,21 +228,36 @@ export function DashboardPage() {
               </div>
             }
           >
-            {data ? (
-              <ParticipationChart
-                data={data.trends.activity}
-                height={260}
-                valueFormat="number"
-                seriesLabel="Eventos"
-              />
-            ) : (
-              <div className="h-[260px] animate-pulse rounded-lg bg-panel-hover" />
-            )}
+            <DataState
+              loading={overviewLoading}
+              error={overviewError}
+              onRetry={reloadOverview}
+              skeleton={
+                <div className="h-[260px] animate-pulse rounded-lg bg-panel-hover" />
+              }
+            >
+              {data && (
+                <ParticipationChart
+                  data={data.trends.activity}
+                  height={260}
+                  valueFormat="number"
+                  seriesLabel="Eventos"
+                />
+              )}
+            </DataState>
           </Card>
         </div>
 
         <div className="reveal" style={{ animationDelay: "200ms" }}>
           <Card title="Gobernanza y alertas" accentDot className="h-full">
+            <DataState
+              loading={overviewLoading}
+              error={overviewError}
+              onRetry={reloadOverview}
+              skeleton={
+                <div className="h-[180px] animate-pulse rounded-lg bg-panel-hover" />
+              }
+            >
             <div className="space-y-2.5">
               {data?.alerts.map((a, i) => {
                 const tone = ALERT_TONE[a.level];
@@ -284,8 +296,8 @@ export function DashboardPage() {
                   <p className="text-sm text-ink-muted">Sin alertas activas.</p>
                 </div>
               )}
-              {!data && <div className="h-[180px] animate-pulse rounded-lg bg-panel-hover" />}
             </div>
+            </DataState>
           </Card>
         </div>
       </div>

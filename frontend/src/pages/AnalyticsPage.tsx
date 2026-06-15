@@ -1,23 +1,19 @@
-import { useEffect, useState } from "react";
-
 import { getOverview } from "@/api/analytics";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ParticipationChart } from "@/components/dashboards/ParticipationChart";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { Card } from "@/components/ui/Card";
+import { DataState } from "@/components/ui/DataState";
 import { AnalyticsIcon } from "@/components/ui/icons";
+import { useAsync } from "@/hooks/useAsync";
 import type { AnalyticsOverview } from "@/types/analytics";
 
 export function AnalyticsPage() {
-  const [data, setData] = useState<AnalyticsOverview | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    getOverview()
-      .then(setData)
-      .catch((e) => setError(e.message));
-  }, []);
+  const { data, loading, error, reload } = useAsync<AnalyticsOverview>(
+    () => getOverview(),
+    [],
+  );
 
   const activity = data?.trends.activity ?? [];
   const totalEvents = activity.reduce((acc, p) => acc + p.value, 0);
@@ -55,25 +51,26 @@ export function AnalyticsPage() {
         }
       />
 
-      {error && (
-        <div className="reveal mb-4 rounded-lg border border-state-critical/40 bg-state-critical/10 px-3 py-2 text-sm text-state-critical">
-          {error}
-        </div>
-      )}
-
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="reveal" style={{ animationDelay: "120ms" }}>
         <Card title="Eventos por día (últimos 14 días)" accentDot className="h-full">
-          {data ? (
-            <ParticipationChart
-              data={data.trends.activity}
-              height={260}
-              valueFormat="number"
-              seriesLabel="Eventos"
-            />
-          ) : (
-            <div className="h-[260px] animate-pulse rounded-lg bg-panel-hover" />
-          )}
+          <DataState
+            loading={loading}
+            error={error}
+            onRetry={reload}
+            skeleton={
+              <div className="h-[260px] animate-pulse rounded-lg bg-panel-hover" />
+            }
+          >
+            {data && (
+              <ParticipationChart
+                data={data.trends.activity}
+                height={260}
+                valueFormat="number"
+                seriesLabel="Eventos"
+              />
+            )}
+          </DataState>
         </Card>
         </div>
 
