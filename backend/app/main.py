@@ -6,6 +6,7 @@ catch-all route so client-side routing survives deep links and refreshes.
 """
 
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -30,6 +31,23 @@ configure_logging()
 logger = get_logger("agora")
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Run the idempotent DB bootstrap at startup (runtime has private networking).
+
+    Disable with RUN_DB_BOOTSTRAP=0 (e.g. when migrations own the schema).
+    """
+    if os.getenv("RUN_DB_BOOTSTRAP", "1") == "1":
+        from app.bootstrap import run_bootstrap
+
+        try:
+            run_bootstrap()
+        except Exception:
+            logger.exception("Database bootstrap failed during startup")
+            raise
+    yield
+
+
 def create_app() -> FastAPI:
     """Application factory."""
     app = FastAPI(
@@ -39,6 +57,7 @@ def create_app() -> FastAPI:
         docs_url="/api/docs",
         redoc_url="/api/redoc",
         openapi_url="/api/openapi.json",
+        lifespan=lifespan,
     )
 
     _configure_cors(app)
