@@ -88,7 +88,9 @@ export function DashboardPage() {
   const [fitKey, setFitKey] = useState(0);
 
   useEffect(() => {
-    getAreas()
+    // State level only — light payload for the mini-map/coverage (municipality
+    // level is ~1854 features / ~29MB and is loaded on demand in Map Explorer).
+    getAreas("state")
       .then((fc) => {
         setAreas(fc);
         if (fc.features.length > 0) setFitKey((k) => k + 1);

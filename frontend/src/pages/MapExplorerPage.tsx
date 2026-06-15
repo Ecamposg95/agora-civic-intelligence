@@ -28,7 +28,7 @@ export function MapExplorerPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Map robustness controls.
-  const [level, setLevel] = useState<string>(""); // "" = all
+  const [level, setLevel] = useState<string>("state"); // default light; "" = all (heavy: ~1854 municipios)
   const [choropleth, setChoropleth] = useState(true);
   const [basemap, setBasemap] = useState<Basemap>("dark");
   const [selected, setSelected] = useState<(AreaProperties & { metric: number }) | null>(null);
