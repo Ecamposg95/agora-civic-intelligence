@@ -54,6 +54,17 @@ def cmd_datasets(args: argparse.Namespace) -> None:
 
 def cmd_cartografia(args: argparse.Namespace) -> None:
     fc = cartografia.fetch_geojson(args.url)
+    # Optional client-side filter (e.g. keep only one state's municipios from a
+    # nationwide GeoJSON): --filter-prop NAME_1 --filter-value "México".
+    if args.filter_prop and args.filter_value is not None:
+        feats = fc.get("features", [])
+        kept = [
+            f for f in feats
+            if str((f.get("properties") or {}).get(args.filter_prop)) == args.filter_value
+        ]
+        print(f"Filtered {len(feats)} → {len(kept)} features where "
+              f"{args.filter_prop}={args.filter_value!r}")
+        fc = {**fc, "features": kept}
     with SessionLocal() as db:
         org = db.execute(
             select(Organization).where(Organization.slug == args.org)
@@ -108,6 +119,10 @@ def main() -> None:
     p_cart.add_argument("--level", default="distrito_federal")
     p_cart.add_argument("--name-prop", dest="name_prop", default="NOMBRE")
     p_cart.add_argument("--code-prop", dest="code_prop", default="CLAVE")
+    p_cart.add_argument("--filter-prop", dest="filter_prop", default=None,
+                        help="Property to filter features by (e.g. NAME_1)")
+    p_cart.add_argument("--filter-value", dest="filter_value", default=None,
+                        help="Keep only features whose --filter-prop equals this")
     p_cart.set_defaults(func=cmd_cartografia)
 
     p_cand = sub.add_parser("candidaturas", help="Fetch Candidaturas MX collection")
