@@ -47,5 +47,5 @@ export const PANEL_HEIGHTS = {
   mapTall: "h-[420px] lg:h-[600px]",
   mapMini: "h-[200px] lg:h-[230px]",
   chartMd: "h-[260px] lg:h-[320px]",
-  copilot: "min-h-[300px] lg:min-h-[440px]",
+  copilot: "h-[300px] lg:h-[440px]",
 } as const;

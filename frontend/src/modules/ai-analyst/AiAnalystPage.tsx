@@ -22,9 +22,12 @@ export function AiAnalystPage() {
     setInput("");
     setTurns((t) => [...t, { role: "user", text: prompt }]);
     setBusy(true);
-    const ans: Answer = await ask(prompt);
-    setTurns((t) => [...t, { role: "assistant", text: ans.text, sample: ans.sample }]);
-    setBusy(false);
+    try {
+      const ans: Answer = await ask(prompt);
+      setTurns((t) => [...t, { role: "assistant", text: ans.text, sample: ans.sample }]);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -60,7 +63,7 @@ export function AiAnalystPage() {
                           key={q}
                           type="button"
                           disabled={busy}
-                          onClick={() => setInput(q)}
+                          onClick={() => send(q)}
                           className="focus-ring rounded-full border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs text-accent transition-colors hover:border-accent/60 hover:bg-accent/20 disabled:opacity-40"
                           aria-label={`Usar pregunta: ${q}`}
                         >
