@@ -24,14 +24,14 @@ export function ComingSoonPage({ module }: { module: ModuleDef }) {
           </span>
 
           <div className="min-w-0 flex-1">
-            <div className="eyebrow">Próximamente</div>
+            <div className="eyebrow">Módulo en planificación</div>
             <h1 className="mt-2 flex flex-wrap items-center gap-3 font-display text-3xl font-bold leading-[1.05] tracking-tight md:text-4xl">
               <span className="text-gradient">{module.label}</span>
-              {/* "En construcción" status pill — warning tone, clearly not live */}
-              <span className={`pill ${TONE_BADGE.warning}`}>
+              {/* "En construcción" status pill — informational (not alarm, not operational) */}
+              <span className={`pill ${TONE_BADGE.info}`}>
                 <span className="relative flex h-2 w-2" aria-hidden="true">
-                  <span className="absolute inline-flex h-full w-full animate-pulse-glow rounded-full bg-state-warning opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-state-warning" />
+                  <span className="absolute inline-flex h-full w-full animate-pulse-glow rounded-full bg-accent opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
                 </span>
                 En construcción
               </span>
