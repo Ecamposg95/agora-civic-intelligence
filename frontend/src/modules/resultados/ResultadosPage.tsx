@@ -20,11 +20,18 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PreviewBanner } from "@/components/modules/PreviewBanner";
 import { Card } from "@/components/ui/Card";
+import type { Column } from "@/components/ui/DataTable";
+import { DataTable } from "@/components/ui/DataTable";
+import { DataState } from "@/components/ui/DataState";
 import { MetricCard } from "@/components/ui/MetricCard";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { SkeletonCard, SkeletonRows } from "@/components/ui/SkeletonCard";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { RadialGauge } from "@/components/charts/RadialGauge";
 import { AnalyticsIcon, ShieldIcon, VotersIcon } from "@/components/ui/icons";
+import { CHART_PALETTE, CHART_TOOLTIP_STYLE, PANEL_HEIGHTS } from "@/constants/ui";
 import { ENTITY_RESULTS, HISTORICAL, NATIONAL, PARTY_RESULTS } from "./fixtures";
+import type { EntityResult } from "./fixtures";
 
 const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
 const nf = new Intl.NumberFormat("es-MX");
@@ -34,18 +41,18 @@ const PARTY_COLOR: Record<string, string> = Object.fromEntries(
   PARTY_RESULTS.map((p) => [p.party, p.color]),
 );
 
-const TOOLTIP_STYLE = {
-  background: "#06090c",
-  border: "1px solid #223a44",
-  borderRadius: 10,
-  color: "#e6f2f5",
-} as const;
+// Historical coalition line colors — fixture party colors are explicitly
+// specified in the data so we keep them; only fall back to CHART_PALETTE
+// for any series without an explicit color.
+const COALITION_COLORS = {
+  coalicionA: CHART_PALETTE[0], // #22d3ee (matches fixture Coalición A color)
+  coalicionB: CHART_PALETTE[1], // #f5b53d (matches fixture Coalición B color)
+  coalicionC: CHART_PALETTE[2], // #2dd4bf (matches fixture Coalición C color)
+};
 
 type View = "nacional" | "entidad" | "historico";
-type SortKey = "entity" | "turnout" | "margin" | "votes";
-type SortDir = "asc" | "desc";
 
-const VIEWS: { id: View; label: string }[] = [
+const VIEW_OPTIONS: { id: View; label: string }[] = [
   { id: "nacional", label: "Nacional" },
   { id: "entidad", label: "Por entidad" },
   { id: "historico", label: "Histórico" },
@@ -64,22 +71,14 @@ export function ResultadosPage() {
       />
       <PreviewBanner />
 
-      {/* Segmented view switch */}
-      <div className="reveal mb-5 inline-flex rounded-xl border border-line bg-bg-sunken p-1">
-        {VIEWS.map((v) => (
-          <button
-            key={v.id}
-            type="button"
-            onClick={() => setView(v.id)}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-              view === v.id
-                ? "bg-accent text-bg shadow-glow-accent"
-                : "text-ink-muted hover:text-ink"
-            }`}
-          >
-            {v.label}
-          </button>
-        ))}
+      {/* Segmented view switch — accessible tablist with keyboard nav */}
+      <div className="reveal mb-5">
+        <SegmentedControl<View>
+          options={VIEW_OPTIONS}
+          value={view}
+          onChange={setView}
+          ariaLabel="Vista de resultados electorales"
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -107,9 +106,23 @@ export function ResultadosPage() {
         />
       </div>
 
-      {view === "nacional" && <NacionalView />}
-      {view === "entidad" && <EntidadView />}
-      {view === "historico" && <HistoricoView />}
+      {/* Preview fixtures — loading=false, error=null; DataState provides
+          structural consistency if real async is wired up later. */}
+      <DataState
+        loading={false}
+        error={null}
+        skeleton={
+          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <SkeletonCard lines={4} />
+            <SkeletonCard lines={4} />
+            <SkeletonRows rows={8} />
+          </div>
+        }
+      >
+        {view === "nacional" && <NacionalView />}
+        {view === "entidad" && <EntidadView />}
+        {view === "historico" && <HistoricoView />}
+      </DataState>
     </AppLayout>
   );
 }
@@ -117,7 +130,10 @@ export function ResultadosPage() {
 function NacionalView() {
   return (
     <>
-      <div className="reveal mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3" style={{ animationDelay: "80ms" }}>
+      <div
+        className="reveal mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3"
+        style={{ animationDelay: "80ms" }}
+      >
         <Card title="Participación nacional" accentDot className="flex items-center justify-center">
           <div className="flex flex-col items-center gap-2 py-2">
             <RadialGauge value={NATIONAL.turnout} label="Participación" size={148} />
@@ -153,18 +169,26 @@ function NacionalView() {
             className="h-full"
             action={<span className="pill border-line text-ink-muted">Cómputo nacional</span>}
           >
-            <div style={{ width: "100%", height: 260 }}>
-              <ResponsiveContainer>
+            <div className={PANEL_HEIGHTS.chartMd}>
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={PARTY_RESULTS} layout="vertical" margin={{ left: 24 }}>
                   <XAxis type="number" tickFormatter={pct} stroke="#52646d" tick={{ fontSize: 12 }} />
-                  <YAxis type="category" dataKey="party" stroke="#52646d" tick={{ fontSize: 12 }} width={110} />
+                  <YAxis
+                    type="category"
+                    dataKey="party"
+                    stroke="#52646d"
+                    tick={{ fontSize: 12 }}
+                    width={110}
+                  />
                   <Tooltip
                     cursor={{ fill: "rgba(34,211,238,0.06)" }}
                     formatter={(v: number) => pct(v)}
-                    contentStyle={TOOLTIP_STYLE}
+                    contentStyle={CHART_TOOLTIP_STYLE}
                   />
                   <Bar dataKey="share" radius={[0, 6, 6, 0]}>
-                    {PARTY_RESULTS.map((p) => <Cell key={p.party} fill={p.color} />)}
+                    {PARTY_RESULTS.map((p) => (
+                      <Cell key={p.party} fill={p.color} />
+                    ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -181,8 +205,8 @@ function NacionalView() {
             className="h-full"
             action={<span className="pill border-line text-ink-muted">Participación nacional</span>}
           >
-            <div style={{ width: "100%", height: 220 }}>
-              <ResponsiveContainer>
+            <div className="h-[220px]">
+              <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={PARTY_RESULTS}
@@ -194,11 +218,13 @@ function NacionalView() {
                     stroke="#06090c"
                     strokeWidth={2}
                   >
-                    {PARTY_RESULTS.map((p) => <Cell key={p.party} fill={p.color} />)}
+                    {PARTY_RESULTS.map((p) => (
+                      <Cell key={p.party} fill={p.color} />
+                    ))}
                   </Pie>
                   <Tooltip
                     formatter={(v: number, n: string) => [pct(v), n]}
-                    contentStyle={TOOLTIP_STYLE}
+                    contentStyle={CHART_TOOLTIP_STYLE}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -238,114 +264,91 @@ function PartyLegend() {
 
 function EntidadView() {
   const [query, setQuery] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("turnout");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  const rows = useMemo(() => {
+  const rows = useMemo<EntityResult[]>(() => {
     const q = query.trim().toLowerCase();
-    const filtered = ENTITY_RESULTS.filter((e) => e.entity.toLowerCase().includes(q));
-    const sorted = [...filtered].sort((a, b) => {
-      let cmp: number;
-      if (sortKey === "entity") cmp = a.entity.localeCompare(b.entity, "es");
-      else cmp = a[sortKey] - b[sortKey];
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-    return sorted;
-  }, [query, sortKey, sortDir]);
+    if (!q) return ENTITY_RESULTS;
+    return ENTITY_RESULTS.filter((e) => e.entity.toLowerCase().includes(q));
+  }, [query]);
 
-  const toggleSort = (key: SortKey) => {
-    if (key === sortKey) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir(key === "entity" ? "asc" : "desc");
-    }
-  };
-
-  const arrow = (key: SortKey) =>
-    sortKey === key ? (sortDir === "asc" ? "▲" : "▼") : "";
+  const columns = useMemo<Column<EntityResult>[]>(
+    () => [
+      {
+        key: "entity",
+        header: "Entidad",
+        sortValue: (e) => e.entity,
+        render: (e) => <span className="font-medium text-ink">{e.entity}</span>,
+      },
+      {
+        key: "turnout",
+        header: "Participación",
+        align: "right",
+        sortValue: (e) => e.turnout,
+        render: (e) => (
+          <span className="font-mono tabular-nums text-ink-muted">{pct(e.turnout)}</span>
+        ),
+      },
+      {
+        key: "winner",
+        header: "Ganador",
+        render: (e) => (
+          <span className="inline-flex items-center gap-2">
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{ backgroundColor: PARTY_COLOR[e.winner] ?? "#7c8aa5" }}
+            />
+            <span className="text-ink">{e.winner}</span>
+          </span>
+        ),
+      },
+      {
+        key: "margin",
+        header: "Margen",
+        align: "right",
+        sortValue: (e) => e.margin,
+        render: (e) => (
+          <span className="font-mono tabular-nums text-ink-muted">{pct(e.margin)}</span>
+        ),
+        hideOnCard: true,
+      },
+      {
+        key: "votes",
+        header: "Votos",
+        align: "right",
+        sortValue: (e) => e.votes,
+        render: (e) => (
+          <span className="font-mono tabular-nums text-ink-muted">{nf.format(e.votes)}</span>
+        ),
+      },
+    ],
+    [],
+  );
 
   return (
     <div className="reveal mt-5" style={{ animationDelay: "120ms" }}>
-      <Card title="Resultados por entidad" accentDot className="!p-0 overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filtrar por entidad…"
-            className="field-input max-w-xs"
-          />
-          <span className="pill border-line text-ink-muted">
-            {rows.length} de {ENTITY_RESULTS.length} entidades
-          </span>
-        </div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Filtrar por entidad…"
+          className="field-input max-w-xs focus-ring"
+          aria-label="Filtrar resultados por entidad"
+        />
+        <span className="pill border-line text-ink-muted">
+          {rows.length} de {ENTITY_RESULTS.length} entidades · muestra
+        </span>
+      </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-line bg-bg-sunken/60 text-left font-mono text-[11px] uppercase tracking-wider text-ink-faint">
-                <th className="px-4 py-3 font-medium">
-                  <button type="button" onClick={() => toggleSort("entity")} className="inline-flex items-center gap-1 hover:text-ink">
-                    Entidad <span className="text-accent">{arrow("entity")}</span>
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-right font-medium">
-                  <button type="button" onClick={() => toggleSort("turnout")} className="inline-flex items-center gap-1 hover:text-ink">
-                    Participación <span className="text-accent">{arrow("turnout")}</span>
-                  </button>
-                </th>
-                <th className="px-4 py-3 font-medium">Ganador</th>
-                <th className="px-4 py-3 text-right font-medium">
-                  <button type="button" onClick={() => toggleSort("margin")} className="inline-flex items-center gap-1 hover:text-ink">
-                    Margen <span className="text-accent">{arrow("margin")}</span>
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-right font-medium">
-                  <button type="button" onClick={() => toggleSort("votes")} className="inline-flex items-center gap-1 hover:text-ink">
-                    Votos <span className="text-accent">{arrow("votes")}</span>
-                  </button>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((e) => (
-                <tr
-                  key={e.entity}
-                  className="border-b border-line/60 transition-colors last:border-0 hover:bg-panel-hover/50"
-                >
-                  <td className="px-4 py-3 text-ink">{e.entity}</td>
-                  <td className="px-4 py-3 text-right font-mono tabular-nums text-ink-muted">
-                    {pct(e.turnout)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-2">
-                      <span
-                        className="h-2 w-2 shrink-0 rounded-full"
-                        style={{ backgroundColor: PARTY_COLOR[e.winner] ?? "#7c8aa5" }}
-                      />
-                      <span className="text-ink">{e.winner}</span>
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono tabular-nums text-ink-muted">
-                    {pct(e.margin)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono tabular-nums text-ink-muted">
-                    {nf.format(e.votes)}
-                  </td>
-                </tr>
-              ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-ink-faint">
-                    Sin coincidencias para “{query}”.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <DataTable<EntityResult>
+        columns={columns}
+        rows={rows}
+        rowKey={(e) => e.entity}
+        pageSize={16}
+        defaultSortKey="votes"
+        defaultSortDir="desc"
+        emptyMessage={`Sin coincidencias para "${query}".`}
+      />
     </div>
   );
 }
@@ -364,11 +367,17 @@ function HistoricoView() {
           className="h-full"
           action={<span className="pill border-line text-ink-muted">muestra · histórico</span>}
         >
-          <div style={{ width: "100%", height: 300 }}>
-            <ResponsiveContainer>
+          <div className={PANEL_HEIGHTS.chartMd}>
+            <ResponsiveContainer width="100%" height="100%">
               <LineChart data={HISTORICAL} margin={{ left: -12, top: 8, right: 8 }}>
                 <CartesianGrid stroke="#15242b" vertical={false} />
-                <XAxis dataKey="year" stroke="#52646d" tick={{ fontSize: 12 }} tickLine={false} axisLine={{ stroke: "#15242b" }} />
+                <XAxis
+                  dataKey="year"
+                  stroke="#52646d"
+                  tick={{ fontSize: 12 }}
+                  tickLine={false}
+                  axisLine={{ stroke: "#15242b" }}
+                />
                 <YAxis
                   stroke="#52646d"
                   tick={{ fontSize: 12 }}
@@ -378,13 +387,34 @@ function HistoricoView() {
                   domain={[0, 0.5]}
                 />
                 <Tooltip
-                  contentStyle={TOOLTIP_STYLE}
+                  contentStyle={CHART_TOOLTIP_STYLE}
                   formatter={(v: number, n: string) => [pct(v), n]}
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line type="monotone" dataKey="coalicionA" name="Coalición A" stroke="#22d3ee" strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="coalicionB" name="Coalición B" stroke="#f5b53d" strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="coalicionC" name="Coalición C" stroke="#2dd4bf" strokeWidth={2} dot={{ r: 3 }} />
+                <Line
+                  type="monotone"
+                  dataKey="coalicionA"
+                  name="Coalición A"
+                  stroke={COALITION_COLORS.coalicionA}
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="coalicionB"
+                  name="Coalición B"
+                  stroke={COALITION_COLORS.coalicionB}
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="coalicionC"
+                  name="Coalición C"
+                  stroke={COALITION_COLORS.coalicionC}
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -398,11 +428,17 @@ function HistoricoView() {
           className="h-full"
           action={<span className="pill border-line text-ink-muted">muestra</span>}
         >
-          <div style={{ width: "100%", height: 180 }}>
-            <ResponsiveContainer>
+          <div className="h-[180px]">
+            <ResponsiveContainer width="100%" height="100%">
               <LineChart data={turnoutTrend} margin={{ left: -12, top: 8, right: 8 }}>
                 <CartesianGrid stroke="#15242b" vertical={false} />
-                <XAxis dataKey="period" stroke="#52646d" tick={{ fontSize: 12 }} tickLine={false} axisLine={{ stroke: "#15242b" }} />
+                <XAxis
+                  dataKey="period"
+                  stroke="#52646d"
+                  tick={{ fontSize: 12 }}
+                  tickLine={false}
+                  axisLine={{ stroke: "#15242b" }}
+                />
                 <YAxis
                   stroke="#52646d"
                   tick={{ fontSize: 12 }}
@@ -411,8 +447,18 @@ function HistoricoView() {
                   tickFormatter={(v: number) => `${(v * 100).toFixed(0)}%`}
                   domain={[0.3, 0.7]}
                 />
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [pct(v), "Participación"]} />
-                <Line type="monotone" dataKey="value" stroke="#22d3ee" strokeWidth={2} dot={{ r: 3, fill: "#22d3ee" }} activeDot={{ r: 5, fill: "#f5b53d" }} />
+                <Tooltip
+                  contentStyle={CHART_TOOLTIP_STYLE}
+                  formatter={(v: number) => [pct(v), "Participación"]}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="value"
+                  stroke={CHART_PALETTE[0]}
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: CHART_PALETTE[0] }}
+                  activeDot={{ r: 5, fill: CHART_PALETTE[1] }}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
