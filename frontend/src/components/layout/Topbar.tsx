@@ -56,14 +56,14 @@ export function Topbar({ title, crumb, onMenu }: TopbarProps) {
           <span className="h-1.5 w-1.5 rounded-full bg-teal" />
           Systems operational
         </span>
-        <button className="btn-ghost focus-ring !px-2.5 sm:!px-4" onClick={handleLogout} title="Sign out">
+        <button className="btn-ghost !px-2.5 sm:!px-4" onClick={handleLogout} title="Sign out">
           <LogoutIcon width={16} height={16} />
           <span className="hidden sm:inline">Sign out</span>
         </button>
         <Link
           to="/profile"
           title="Mi perfil"
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line bg-panel-raised text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-ink"
+          className="focus-ring grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line bg-panel-raised text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-ink"
         >
           {initials}
         </Link>
