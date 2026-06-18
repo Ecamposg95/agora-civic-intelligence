@@ -13,8 +13,11 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { Button } from "@/components/ui/Button";
+import { DataState } from "@/components/ui/DataState";
+import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Modal } from "@/components/ui/Modal";
 import { SearchIcon, UserIcon } from "@/components/ui/icons";
+import { ROLE_BADGE, TONE_BADGE } from "@/constants/ui";
 import { useAuthStore } from "@/store/authStore";
 import type { User, UserRole } from "@/types/auth";
 import type { UserCreatePayload, UserUpdatePayload } from "@/types/users";
@@ -22,12 +25,66 @@ import type { UserCreatePayload, UserUpdatePayload } from "@/types/users";
 const PAGE_SIZE = 20;
 const ALL_ROLES: UserRole[] = ["superadmin", "admin", "analyst", "viewer"];
 
-const ROLE_BADGE: Record<UserRole, string> = {
-  superadmin: "border-accent/30 bg-accent/10 text-accent",
-  admin: "border-teal/30 bg-teal/10 text-teal",
-  analyst: "border-state-warning/30 bg-state-warning/10 text-state-warning",
-  viewer: "border-line text-ink-muted",
-};
+// Columns defined at module scope — render fns only reference module-level
+// constants (ROLE_BADGE, TONE_BADGE), so no closure over props/state.
+// This keeps DataTable's internal useMemo dep-array stable.
+const USER_COLUMNS: Column<User>[] = [
+  {
+    key: "full_name",
+    header: "Usuario",
+    sortValue: (u) => u.full_name,
+    render: (u) => (
+      <div className="flex items-center gap-3">
+        <span className="metric-chip h-8 w-8 shrink-0 font-display text-[11px] font-bold text-accent">
+          {u.full_name
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((p) => p[0]?.toUpperCase() ?? "")
+            .join("") || "—"}
+        </span>
+        <div className="min-w-0">
+          <div className="truncate font-medium text-ink">{u.full_name}</div>
+          <div className="truncate font-mono text-xs text-ink-faint">{u.email}</div>
+        </div>
+      </div>
+    ),
+  },
+  {
+    key: "role",
+    header: "Rol",
+    sortValue: (u) => u.role,
+    render: (u) => (
+      <span className={`pill ${TONE_BADGE[ROLE_BADGE[u.role] ?? "neutral"]}`}>{u.role}</span>
+    ),
+  },
+  {
+    key: "is_active",
+    header: "Estado",
+    sortValue: (u) => (u.is_active ? 1 : 0),
+    render: (u) => (
+      <div className="flex flex-wrap items-center gap-1.5">
+        {u.is_active ? (
+          <span className={`pill ${TONE_BADGE.ok}`}>Activo</span>
+        ) : (
+          <span className={`pill ${TONE_BADGE.critical}`}>Inactivo</span>
+        )}
+        {u.must_change_password && (
+          <span className={`pill ${TONE_BADGE.warning}`}>Cambio pendiente</span>
+        )}
+      </div>
+    ),
+  },
+  {
+    key: "phone",
+    header: "Teléfono",
+    hideOnCard: true,
+    render: (u) => (
+      <span className="font-mono text-xs text-ink-muted">{u.phone || "—"}</span>
+    ),
+  },
+];
 
 type StatusFilter = "all" | "active" | "inactive";
 
@@ -101,6 +158,77 @@ export function UsersPage() {
       setError(err instanceof Error ? err.message : "La operación falló");
     }
   };
+
+  // Actions column references withRefresh/setEditing/setConfirmDelete/
+  // setTempPassword (all stable) and includeDeleted (boolean state).
+  // useMemo keeps the array reference stable to avoid DataTable re-sorting.
+  const columns = useMemo<Column<User>[]>(
+    () => [
+      ...USER_COLUMNS,
+      {
+        key: "actions",
+        header: "Acciones",
+        align: "right" as const,
+        render: (u) => (
+          <div className="flex flex-wrap justify-end gap-1.5 text-xs">
+            <button
+              className="rounded-md border border-line bg-bg-sunken px-2 py-1 font-medium text-accent transition-colors hover:border-accent/40 hover:bg-accent/10"
+              onClick={() => setEditing(u)}
+            >
+              Editar
+            </button>
+            {u.is_active ? (
+              <button
+                className="rounded-md border border-line bg-bg-sunken px-2 py-1 font-medium text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
+                onClick={() => withRefresh(() => setActive(u.id, false))}
+              >
+                Desactivar
+              </button>
+            ) : (
+              <button
+                className="rounded-md border border-line bg-bg-sunken px-2 py-1 font-medium text-teal transition-colors hover:border-teal/40 hover:bg-teal/10"
+                onClick={() => withRefresh(() => setActive(u.id, true))}
+              >
+                Activar
+              </button>
+            )}
+            <button
+              className="rounded-md border border-line bg-bg-sunken px-2 py-1 font-medium text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
+              onClick={() =>
+                withRefresh(async () => {
+                  const r = await resetPassword(u.id);
+                  setTempPassword({
+                    label: `Contraseña temporal para ${u.email}`,
+                    value: r.temporary_password,
+                  });
+                })
+              }
+            >
+              Reset clave
+            </button>
+            <button
+              className="rounded-md border border-line bg-bg-sunken px-2 py-1 font-medium text-state-critical transition-colors hover:border-state-critical/40 hover:bg-state-critical/10"
+              onClick={() => setConfirmDelete(u)}
+            >
+              Eliminar
+            </button>
+            {includeDeleted && (
+              <button
+                className="rounded-md border border-line bg-bg-sunken px-2 py-1 font-medium text-teal transition-colors hover:border-teal/40 hover:bg-teal/10"
+                onClick={() => withRefresh(() => restoreUser(u.id))}
+              >
+                Restaurar
+              </button>
+            )}
+          </div>
+        ),
+      },
+    ],
+    // withRefresh recreated each render (arrow fn) but render fns are closures
+    // called lazily; only includeDeleted changes visible rendered output.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [includeDeleted],
+  );
 
   const page = Math.floor(offset / PAGE_SIZE) + 1;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -202,145 +330,22 @@ export function UsersPage() {
         </label>
       </div>
 
-      {error && (
-        <div className="reveal mb-4 rounded-lg border border-state-critical/40 bg-state-critical/10 px-3 py-2 text-sm text-state-critical">
-          {error}
-        </div>
-      )}
-
-      {/* Table */}
-      <div className="reveal card-premium overflow-x-auto !p-0" style={{ animationDelay: "200ms" }}>
-        <table className="w-full min-w-[720px] text-sm">
-          <thead>
-            <tr className="border-b border-line bg-bg-sunken/60 text-left font-mono text-[11px] uppercase tracking-wider text-ink-faint">
-              <th className="px-4 py-3 font-medium">Usuario</th>
-              <th className="px-4 py-3 font-medium">Rol</th>
-              <th className="px-4 py-3 font-medium">Estado</th>
-              <th className="px-4 py-3 font-medium">Teléfono</th>
-              <th className="px-4 py-3 text-right font-medium">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading &&
-              Array.from({ length: 6 }).map((_, i) => (
-                <tr key={i} className="border-b border-line/60 last:border-0">
-                  {Array.from({ length: 5 }).map((__, j) => (
-                    <td key={j} className="px-4 py-3.5">
-                      <div className="h-5 animate-pulse rounded bg-panel-hover" />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            {!loading && rows.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-12 text-center text-sm text-ink-faint">
-                  Sin usuarios para los filtros actuales.
-                </td>
-              </tr>
-            )}
-            {!loading &&
-              rows.map((u) => {
-                const deleted = false; // deleted_at not surfaced; inactive implies status
-                return (
-                  <tr
-                    key={u.id}
-                    className="border-b border-line/60 transition-colors last:border-0 hover:bg-panel-hover/50"
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <span className="metric-chip h-8 w-8 shrink-0 font-display text-[11px] font-bold text-accent">
-                          {u.full_name
-                            .trim()
-                            .split(/\s+/)
-                            .filter(Boolean)
-                            .slice(0, 2)
-                            .map((p) => p[0]?.toUpperCase() ?? "")
-                            .join("") || "—"}
-                        </span>
-                        <div className="min-w-0">
-                          <div className="truncate font-medium text-ink">{u.full_name}</div>
-                          <div className="truncate font-mono text-xs text-ink-faint">{u.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`pill ${ROLE_BADGE[u.role]}`}>{u.role}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {u.is_active ? (
-                          <span className="pill border-teal/30 bg-teal/10 text-teal">Activo</span>
-                        ) : (
-                          <span className="pill border-state-critical/30 bg-state-critical/10 text-state-critical">
-                            Inactivo
-                          </span>
-                        )}
-                        {u.must_change_password && (
-                          <span className="pill border-state-warning/30 bg-state-warning/10 text-state-warning">
-                            Cambio pendiente
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-ink-muted">{u.phone || "—"}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap justify-end gap-1.5 text-xs">
-                        <button
-                          className="rounded-md border border-line bg-bg-sunken px-2 py-1 font-medium text-accent transition-colors hover:border-accent/40 hover:bg-accent/10"
-                          onClick={() => setEditing(u)}
-                        >
-                          Editar
-                        </button>
-                        {u.is_active ? (
-                          <button
-                            className="rounded-md border border-line bg-bg-sunken px-2 py-1 font-medium text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
-                            onClick={() => withRefresh(() => setActive(u.id, false))}
-                          >
-                            Desactivar
-                          </button>
-                        ) : (
-                          <button
-                            className="rounded-md border border-line bg-bg-sunken px-2 py-1 font-medium text-teal transition-colors hover:border-teal/40 hover:bg-teal/10"
-                            onClick={() => withRefresh(() => setActive(u.id, true))}
-                          >
-                            Activar
-                          </button>
-                        )}
-                        <button
-                          className="rounded-md border border-line bg-bg-sunken px-2 py-1 font-medium text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
-                          onClick={() =>
-                            withRefresh(async () => {
-                              const r = await resetPassword(u.id);
-                              setTempPassword({
-                                label: `Contraseña temporal para ${u.email}`,
-                                value: r.temporary_password,
-                              });
-                            })
-                          }
-                        >
-                          Reset clave
-                        </button>
-                        <button
-                          className="rounded-md border border-line bg-bg-sunken px-2 py-1 font-medium text-state-critical transition-colors hover:border-state-critical/40 hover:bg-state-critical/10"
-                          onClick={() => setConfirmDelete(u)}
-                        >
-                          Eliminar
-                        </button>
-                        {includeDeleted && !deleted && (
-                          <button
-                            className="rounded-md border border-line bg-bg-sunken px-2 py-1 font-medium text-teal transition-colors hover:border-teal/40 hover:bg-teal/10"
-                            onClick={() => withRefresh(() => restoreUser(u.id))}
-                          >
-                            Restaurar
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-          </tbody>
-        </table>
+      {/* Table — DataState handles loading skeleton, error card, and empty state */}
+      <div className="reveal" style={{ animationDelay: "200ms" }}>
+        <DataState
+          loading={loading}
+          error={error}
+          onRetry={fetchUsers}
+          isEmpty={rows.length === 0}
+          emptyMessage="Sin usuarios para los filtros actuales."
+        >
+          <DataTable
+            columns={columns}
+            rows={rows}
+            rowKey={(u) => u.id}
+            pageSize={PAGE_SIZE}
+          />
+        </DataState>
       </div>
 
       {/* Pagination */}
