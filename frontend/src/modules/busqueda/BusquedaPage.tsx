@@ -267,16 +267,15 @@ export function BusquedaPage() {
           />
         </div>
 
-        {/* Result count — only shown after a query */}
-        {hasSearched && !loading && !error && (
+        {/* Result count — only when a query returned matches. The zero-results
+            card below is the single aria-live announcement for the empty case. */}
+        {hasSearched && !loading && !error && totalResults > 0 && (
           <p
             className="mt-2 font-mono text-xs text-ink-faint"
             aria-live="polite"
             aria-atomic="true"
           >
-            {totalResults === 0
-              ? `Sin resultados para "${query.trim()}"`
-              : `${totalResults} resultado${totalResults === 1 ? "" : "s"} para "${query.trim()}"`}
+            {`${totalResults} resultado${totalResults === 1 ? "" : "s"} para "${query.trim()}"`}
           </p>
         )}
       </div>
