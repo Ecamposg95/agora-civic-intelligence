@@ -12,12 +12,12 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { PreviewBanner } from "@/components/modules/PreviewBanner";
 import { Card } from "@/components/ui/Card";
 import { DataState } from "@/components/ui/DataState";
+import type { Column } from "@/components/ui/DataTable";
+import { DataTable } from "@/components/ui/DataTable";
 import { MetricCard } from "@/components/ui/MetricCard";
-import {
-  AnalyticsIcon,
-  ArrowUpIcon,
-  SearchIcon,
-} from "@/components/ui/icons";
+import { SkeletonCard, SkeletonRows } from "@/components/ui/SkeletonCard";
+import { AnalyticsIcon, ArrowUpIcon, SearchIcon } from "@/components/ui/icons";
+import { PANEL_HEIGHTS } from "@/constants/ui";
 import { useAsync } from "@/hooks/useAsync";
 import {
   DIMENSIONS,
@@ -26,16 +26,18 @@ import {
   type ScoredArea,
 } from "./score";
 
-type SortKey = "name" | "index" | "participacion" | "cobertura" | "socioeconomico";
-type SortDir = "asc" | "desc";
-
 const pct = (v: number): string => `${(v * 100).toFixed(1)}%`;
 
-/** Color for the index bar by tier (sample-only thresholds). */
+/** Tier color for the inline index bar (sample-only thresholds). */
 function tierColor(v: number): string {
   if (v >= 0.7) return "#22d3ee";
   if (v >= 0.5) return "#2dd4bf";
   return "#f5b53d";
+}
+
+/** Trim long entity names so stacked-bar axis labels stay readable. */
+function shortName(name: string): string {
+  return name.length > 12 ? `${name.slice(0, 11)}…` : name;
 }
 
 export function IndicePage() {
@@ -45,8 +47,6 @@ export function IndicePage() {
   );
 
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("index");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const scored = useMemo<ScoredArea[]>(() => {
@@ -71,36 +71,16 @@ export function IndicePage() {
     return top;
   }, [scored, selectedId, top]);
 
-  const toggleSort = (key: SortKey) => {
-    if (key === sortKey) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      // Names default to ascending; numeric dimensions default to descending.
-      setSortDir(key === "name" ? "asc" : "desc");
-    }
-  };
-
+  // Filtered rows passed to DataTable (DataTable owns sort internally).
   const rows = useMemo<ScoredArea[]>(() => {
     const q = search.trim().toLowerCase();
-    const filtered = q
-      ? scored.filter(
-          (s) =>
-            s.name.toLowerCase().includes(q) ||
-            (s.code ?? "").toLowerCase().includes(q),
-        )
-      : scored;
-
-    const dir = sortDir === "asc" ? 1 : -1;
-    return [...filtered].sort((a, b) => {
-      if (sortKey === "name") return a.name.localeCompare(b.name) * dir;
-      const av =
-        sortKey === "index" ? a.index : a.dimensions[sortKey];
-      const bv =
-        sortKey === "index" ? b.index : b.dimensions[sortKey];
-      return (av - bv) * dir;
-    });
-  }, [scored, search, sortKey, sortDir]);
+    if (!q) return scored;
+    return scored.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        (s.code ?? "").toLowerCase().includes(q),
+    );
+  }, [scored, search]);
 
   // Rank lookup (by composite index, independent of current table sort).
   const rankById = useMemo<Map<string, number>>(() => {
@@ -108,6 +88,64 @@ export function IndicePage() {
     rankedDesc.forEach((s, i) => m.set(s.id, i + 1));
     return m;
   }, [rankedDesc]);
+
+  // DataTable columns — memoized so the reference is stable across renders.
+  const columns = useMemo<Column<ScoredArea>[]>(
+    () => [
+      {
+        key: "rank",
+        header: "#",
+        align: "right",
+        hideOnCard: true,
+        render: (s) => (
+          <span className="font-mono text-xs text-ink-faint">
+            {rankById.get(s.id)}
+          </span>
+        ),
+      },
+      {
+        key: "name",
+        header: "Entidad",
+        sortValue: (s) => s.name,
+        render: (s) => (
+          <span>
+            <span className="block font-medium text-ink">{s.name}</span>
+            {s.code && (
+              <span className="font-mono text-[11px] text-ink-faint">
+                {s.code}
+              </span>
+            )}
+          </span>
+        ),
+      },
+      {
+        key: "index",
+        header: "Índice (muestra)",
+        align: "right",
+        sortValue: (s) => s.index,
+        render: (s) => (
+          <span className="font-mono font-semibold text-ink">{pct(s.index)}</span>
+        ),
+      },
+      {
+        key: "bar",
+        header: "Composición",
+        hideOnCard: true,
+        render: (s) => (
+          <div className="h-2 w-full min-w-[80px] overflow-hidden rounded-pill bg-bg-sunken ring-1 ring-inset ring-white/5">
+            <div
+              className="h-full rounded-pill transition-all"
+              style={{
+                width: `${s.index * 100}%`,
+                background: tierColor(s.index),
+              }}
+            />
+          </div>
+        ),
+      },
+    ],
+    [rankById],
+  );
 
   const donutData = useMemo<DonutDatum[]>(() => {
     if (!selected) return [];
@@ -170,288 +208,172 @@ export function IndicePage() {
         skeleton={
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-32 animate-pulse rounded-card bg-panel-hover"
-                />
-              ))}
+              <SkeletonCard className="h-32" />
+              <SkeletonCard className="h-32" />
+              <SkeletonCard className="h-32" />
             </div>
-            <div className="h-96 animate-pulse rounded-card bg-panel-hover" />
+            <SkeletonRows rows={8} />
           </div>
         }
       >
-        {/* Highlights */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <MetricCard
-            label="Mayor índice (muestra)"
-            value={top ? `${pct(top.index)}` : "—"}
-            delta={top ? top.name : undefined}
-            icon={<ArrowUpIcon />}
-            tone="accent"
-            delay={60}
-          />
-          <MetricCard
-            label="Menor índice (muestra)"
-            value={bottom ? `${pct(bottom.index)}` : "—"}
-            delta={bottom ? bottom.name : undefined}
-            icon={<AnalyticsIcon />}
-            tone="warning"
-            delay={120}
-          />
-          <MetricCard
-            label="Promedio nacional (muestra)"
-            value={pct(avg)}
-            delta={`${scored.length} entidades`}
-            icon={<AnalyticsIcon />}
-            tone="teal"
-            delay={180}
-          />
-        </div>
+        <div className="reveal space-y-4">
+          {/* Highlights */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <MetricCard
+              label="Mayor índice (muestra)"
+              value={top ? `${pct(top.index)}` : "—"}
+              delta={top ? top.name : undefined}
+              icon={<ArrowUpIcon />}
+              tone="accent"
+              delay={60}
+            />
+            <MetricCard
+              label="Menor índice (muestra)"
+              value={bottom ? `${pct(bottom.index)}` : "—"}
+              delta={bottom ? bottom.name : undefined}
+              icon={<AnalyticsIcon />}
+              tone="warning"
+              delay={120}
+            />
+            <MetricCard
+              label="Promedio nacional (muestra)"
+              value={pct(avg)}
+              delta={`${scored.length} entidades`}
+              icon={<AnalyticsIcon />}
+              tone="teal"
+              delay={180}
+            />
+          </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px]">
-          {/* LEFT — ranked, searchable, sortable table */}
-          <Card
-            title="Ranking de territorios · índice de muestra"
-            accentDot
-            className="p-0"
-          >
-            <div className="border-b border-line p-3">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px]">
+            {/* LEFT — ranked, searchable, sortable table via DataTable */}
+            <div className="space-y-3">
               <div className="relative">
                 <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Buscar entidad por nombre o clave…"
+                  aria-label="Buscar entidad"
                   className="field-input !py-2 pl-9"
                 />
               </div>
+              <DataTable<ScoredArea>
+                columns={columns}
+                rows={rows}
+                rowKey={(s) => s.id}
+                pageSize={20}
+                defaultSortKey="index"
+                defaultSortDir="desc"
+                emptyMessage={
+                  search
+                    ? `Ninguna entidad coincide con "${search}".`
+                    : "Sin datos."
+                }
+                onRowClick={(s) => setSelectedId(s.id)}
+              />
             </div>
 
-            <div className="max-h-[460px] overflow-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="sticky top-0 z-10 bg-panel">
-                  <tr className="border-b border-line text-ink-faint">
-                    <th className="px-3 py-2 font-medium">#</th>
-                    <SortableTh
-                      label="Entidad"
-                      col="name"
-                      sortKey={sortKey}
-                      sortDir={sortDir}
-                      onClick={toggleSort}
-                    />
-                    <SortableTh
-                      label="Índice"
-                      col="index"
-                      sortKey={sortKey}
-                      sortDir={sortDir}
-                      onClick={toggleSort}
-                      numeric
-                    />
-                    <th className="px-3 py-2 font-medium">Composición (muestra)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={4}
-                        className="px-4 py-10 text-center text-ink-faint"
-                      >
-                        Ninguna entidad coincide con “{search}”.
-                      </td>
-                    </tr>
-                  ) : (
-                    rows.map((s) => {
-                      const active = selected?.id === s.id;
-                      return (
-                        <tr
-                          key={s.id}
-                          onClick={() => setSelectedId(s.id)}
-                          className={`cursor-pointer border-b border-line/60 transition-colors ${
-                            active
-                              ? "bg-accent/10"
-                              : "hover:bg-panel-hover/60"
-                          }`}
-                        >
-                          <td className="px-3 py-2 font-mono text-xs text-ink-faint">
-                            {rankById.get(s.id)}
-                          </td>
-                          <td className="px-3 py-2">
-                            <span className="block font-medium text-ink">
-                              {s.name}
-                            </span>
-                            {s.code && (
-                              <span className="font-mono text-[11px] text-ink-faint">
-                                {s.code}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2">
-                            <span className="font-mono font-semibold text-ink">
-                              {pct(s.index)}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2">
-                            <div className="h-2 w-full overflow-hidden rounded-pill bg-bg-sunken ring-1 ring-inset ring-white/5">
-                              <div
-                                className="h-full rounded-pill"
-                                style={{
-                                  width: `${s.index * 100}%`,
-                                  background: tierColor(s.index),
-                                }}
-                              />
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          {/* RIGHT — selected territory breakdown */}
-          <div className="space-y-4">
-            <Card
-              title="Composición por dimensión"
-              accentDot
-              action={
-                selected && (
-                  <span className="pill border-line text-[10px] text-ink-muted">
-                    {selected.name}
-                  </span>
-                )
-              }
-            >
-              {selected ? (
-                <>
-                  <div className="relative">
-                    <Donut data={donutData} height={188} />
-                    <div className="pointer-events-none absolute inset-0 grid place-items-center">
-                      <div className="text-center">
-                        <div className="font-display text-xl font-bold tabular-nums text-ink">
-                          {pct(selected.index)}
+            {/* RIGHT — selected territory breakdown */}
+            <div className="space-y-4">
+              <Card
+                title="Composición por dimensión"
+                accentDot
+                action={
+                  selected && (
+                    <span className="pill border-line text-[10px] text-ink-muted">
+                      {selected.name}
+                    </span>
+                  )
+                }
+              >
+                {selected ? (
+                  <>
+                    <div className="relative">
+                      <Donut data={donutData} height={188} />
+                      <div className="pointer-events-none absolute inset-0 grid place-items-center">
+                        <div className="text-center">
+                          <div className="font-display text-xl font-bold tabular-nums text-ink">
+                            {pct(selected.index)}
+                          </div>
+                          <div className="eyebrow text-ink-faint">índice</div>
                         </div>
-                        <div className="eyebrow text-ink-faint">índice</div>
                       </div>
                     </div>
-                  </div>
-                  <ul className="mt-3 space-y-2">
-                    {DIMENSIONS.map((d) => (
-                      <li
-                        key={d.key}
-                        className="flex items-center justify-between gap-3 text-sm"
-                      >
-                        <span className="flex items-center gap-2 text-ink-muted">
-                          <span
-                            className="h-2.5 w-2.5 rounded-full"
-                            style={{ background: d.color }}
-                          />
-                          {d.label}
-                        </span>
-                        <span className="flex items-center gap-2">
-                          <span className="font-mono text-xs text-ink-faint">
-                            ·{(d.weight * 100).toFixed(0)}%
+                    <ul className="mt-3 space-y-2">
+                      {DIMENSIONS.map((d) => (
+                        <li
+                          key={d.key}
+                          className="flex items-center justify-between gap-3 text-sm"
+                        >
+                          <span className="flex items-center gap-2 text-ink-muted">
+                            <span
+                              className="h-2.5 w-2.5 rounded-full"
+                              style={{ background: d.color }}
+                            />
+                            {d.label}
                           </span>
-                          <span className="font-mono font-semibold text-ink">
-                            {pct(selected.dimensions[d.key])}
+                          <span className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-ink-faint">
+                              ·{(d.weight * 100).toFixed(0)}%
+                            </span>
+                            <span className="font-mono font-semibold text-ink">
+                              {pct(selected.dimensions[d.key])}
+                            </span>
                           </span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-3 text-[11px] leading-relaxed text-ink-faint">
-                    Entidad real · puntajes y pesos de muestra. Selecciona otra
-                    fila para recomponer el desglose.
-                  </p>
-                </>
-              ) : (
-                <p className="text-sm text-ink-faint">Sin selección.</p>
-              )}
-            </Card>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-3 text-[11px] leading-relaxed text-ink-faint">
+                      Entidad real · puntajes y pesos de muestra. Selecciona otra
+                      fila para recomponer el desglose.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-ink-faint">Sin selección.</p>
+                )}
+              </Card>
+            </div>
           </div>
-        </div>
 
-        {/* Stacked contribution of sub-dimensions across the top territories */}
-        <Card
-          title="Contribución de dimensiones · top entidades (muestra)"
-          accentDot
-          className="mt-4"
-          action={
-            <span className="text-[11px] text-ink-faint">
-              aporte ponderado al índice
-            </span>
-          }
-        >
-          <StackedBars
-            data={stackData}
-            series={stackSeries}
-            xKey="name"
-            height={260}
-          />
-          <div className="mt-3 flex flex-wrap items-center gap-4">
-            {DIMENSIONS.map((d) => (
-              <span
-                key={d.key}
-                className="flex items-center gap-2 text-xs text-ink-muted"
-              >
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ background: d.color }}
-                />
-                {d.label}
-                <span className="font-mono text-ink-faint">
-                  ({(d.weight * 100).toFixed(0)}%)
-                </span>
+          {/* Stacked contribution of sub-dimensions across the top territories */}
+          <Card
+            title="Contribución de dimensiones · top entidades (muestra)"
+            accentDot
+            action={
+              <span className="text-[11px] text-ink-faint">
+                aporte ponderado al índice
               </span>
-            ))}
-          </div>
-        </Card>
+            }
+          >
+            <div className={`w-full ${PANEL_HEIGHTS.chartMd}`}>
+              <StackedBars
+                data={stackData}
+                series={stackSeries}
+                xKey="name"
+                height="100%"
+              />
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-4">
+              {DIMENSIONS.map((d) => (
+                <span
+                  key={d.key}
+                  className="flex items-center gap-2 text-xs text-ink-muted"
+                >
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ background: d.color }}
+                  />
+                  {d.label}
+                  <span className="font-mono text-ink-faint">
+                    ({(d.weight * 100).toFixed(0)}%)
+                  </span>
+                </span>
+              ))}
+            </div>
+          </Card>
+        </div>
       </DataState>
     </AppLayout>
   );
-}
-
-/** Sortable table header cell with direction indicator. */
-function SortableTh({
-  label,
-  col,
-  sortKey,
-  sortDir,
-  onClick,
-  numeric,
-}: {
-  label: string;
-  col: SortKey;
-  sortKey: SortKey;
-  sortDir: SortDir;
-  onClick: (key: SortKey) => void;
-  numeric?: boolean;
-}) {
-  const active = sortKey === col;
-  return (
-    <th className="px-3 py-2 font-medium">
-      <button
-        type="button"
-        onClick={() => onClick(col)}
-        className={`inline-flex items-center gap-1 transition-colors hover:text-ink ${
-          active ? "text-accent" : ""
-        } ${numeric ? "tabular-nums" : ""}`}
-      >
-        {label}
-        {active && (
-          <span className="font-mono text-[10px]">
-            {sortDir === "asc" ? "▲" : "▼"}
-          </span>
-        )}
-      </button>
-    </th>
-  );
-}
-
-/** Trim long entity names so stacked-bar axis labels stay readable. */
-function shortName(name: string): string {
-  return name.length > 12 ? `${name.slice(0, 11)}…` : name;
 }

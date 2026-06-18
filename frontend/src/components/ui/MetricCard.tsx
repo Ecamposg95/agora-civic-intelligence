@@ -9,6 +9,13 @@ interface MetricCardProps {
   label: string;
   value: string;
   delta?: string;
+  /** Directional indicator for the delta badge.
+   * - omitted / undefined → same as before: up-arrow + tone-colored accent text
+   * - "up"   → up-arrow + positive/accent color (same as default)
+   * - "down" → down-arrow + muted/critical color
+   * - "flat" → no arrow, neutral muted color
+   */
+  deltaDir?: "up" | "down" | "flat";
   icon?: ReactNode;
   trend?: number[];
   tone?: Tone;
@@ -51,6 +58,7 @@ export function MetricCard({
   label,
   value,
   delta,
+  deltaDir,
   icon,
   trend,
   tone = "accent",
@@ -83,9 +91,22 @@ export function MetricCard({
       </div>
 
       {delta ? (
-        <span className={`mt-2 inline-flex items-center gap-1 text-xs font-medium ${t.text}`}>
-          <ArrowUpIcon /> {delta}
-        </span>
+        deltaDir === "down" ? (
+          // Falling series: down-arrow + muted/critical color
+          <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-state-critical">
+            <ArrowUpIcon style={{ transform: "rotate(180deg)" }} /> {delta}
+          </span>
+        ) : deltaDir === "flat" ? (
+          // Flat/neutral: no arrow
+          <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-ink-muted">
+            {delta}
+          </span>
+        ) : (
+          // "up" or omitted (default behavior — backward-compatible)
+          <span className={`mt-2 inline-flex items-center gap-1 text-xs font-medium ${t.text}`}>
+            <ArrowUpIcon /> {delta}
+          </span>
+        )
       ) : (
         <span className="mt-2 inline-flex text-xs text-ink-faint">Baseline</span>
       )}

@@ -300,10 +300,10 @@ export function SegmentedControl<T extends string>({
       move(i - 1);
     } else if (e.key === "Home") {
       e.preventDefault();
-      move(-i); // -> index 0
+      move(0);
     } else if (e.key === "End") {
       e.preventDefault();
-      move(options.length - 1 - i);
+      move(options.length - 1);
     }
   };
 
@@ -715,7 +715,7 @@ For each module, apply these concrete edits. This is the full procedure — modu
 
 **P-3. Tabs/segmented views.** Replace ad-hoc segmented button rows with `<SegmentedControl options value onChange ariaLabel />`.
 
-**P-4. Tables.** Replace hand-rolled `<table>` markup with `<DataTable columns rows rowKey />`. Define `Column<T>[]` with `sortValue` on sortable columns.
+**P-4. Tables.** Replace hand-rolled `<table>` markup with `<DataTable columns rows rowKey />`. Define `Column<T>[]`. **Sort/pagination rule (from the UsersPage reference migration):** only give columns `sortValue` (and rely on DataTable's built-in pagination) when the FULL dataset is loaded client-side. If the page paginates/sorts on the SERVER (its own Anterior/Siguiente + sort `<select>`), OMIT `sortValue` from columns — client-side header sort would only reorder the visible page and contradict the server order. Memoize the `columns` array (`useMemo`/module scope) so DataTable's internal sort memo stays stable.
 
 **P-5. Charts.** Replace inline tooltip hex objects with `contentStyle={CHART_TOOLTIP_STYLE}`; pull series colors from `CHART_PALETTE`. Remove local tooltip-style constants.
 

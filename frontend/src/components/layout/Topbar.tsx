@@ -35,7 +35,7 @@ export function Topbar({ title, crumb, onMenu }: TopbarProps) {
           type="button"
           onClick={onMenu}
           aria-label="Abrir menú"
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line text-ink-muted hover:text-ink lg:hidden"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line text-ink-muted hover:text-ink focus-ring lg:hidden"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <line x1="3" y1="6" x2="21" y2="6" />
@@ -63,7 +63,7 @@ export function Topbar({ title, crumb, onMenu }: TopbarProps) {
         <Link
           to="/profile"
           title="Mi perfil"
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line bg-panel-raised text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-ink"
+          className="focus-ring grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line bg-panel-raised text-xs font-semibold text-ink-muted transition-colors hover:border-accent hover:text-ink"
         >
           {initials}
         </Link>

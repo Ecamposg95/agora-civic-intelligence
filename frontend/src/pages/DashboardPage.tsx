@@ -17,6 +17,7 @@ import { DataState } from "@/components/ui/DataState";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { useAsync } from "@/hooks/useAsync";
+import { PANEL_HEIGHTS } from "@/constants/ui";
 import {
   AlertIcon,
   DatabaseIcon,
@@ -400,10 +401,10 @@ export function DashboardPage() {
             }
           >
             {!areas ? (
-              <div className="h-[230px] animate-pulse rounded-lg bg-panel-hover" />
+              <div className={`${PANEL_HEIGHTS.mapMini} animate-pulse rounded-lg bg-panel-hover`} />
             ) : hasAreas ? (
               <div className="space-y-4">
-                <div className="relative h-[230px] overflow-hidden rounded-card">
+                <div className={`relative ${PANEL_HEIGHTS.mapMini} overflow-hidden rounded-card`}>
                   <MapCanvas
                     areas={areas}
                     showAreas
@@ -418,7 +419,7 @@ export function DashboardPage() {
                 {coverage.length > 0 && <CoverageBars data={coverage} height={140} />}
               </div>
             ) : (
-              <div className="grid h-[230px] place-items-center text-center text-sm text-ink-faint">
+              <div className={`grid ${PANEL_HEIGHTS.mapMini} place-items-center text-center text-sm text-ink-faint`}>
                 <div>
                   Sin cartografía cargada todavía.
                   <br />

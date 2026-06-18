@@ -7,28 +7,114 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { MapCanvas } from "@/components/maps/MapCanvas";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { Card } from "@/components/ui/Card";
+import type { Column } from "@/components/ui/DataTable";
+import { DataTable } from "@/components/ui/DataTable";
 import { DataState } from "@/components/ui/DataState";
 import { MetricCard } from "@/components/ui/MetricCard";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { SkeletonRows } from "@/components/ui/SkeletonCard";
 import { LayersIcon, MapIcon, SearchIcon } from "@/components/ui/icons";
+import { CHART_PALETTE, PANEL_HEIGHTS } from "@/constants/ui";
 import { useAsync } from "@/hooks/useAsync";
 import type { AreaFeature, AreaProperties, AreasResponse } from "@/types/maps";
 import { sampleMetric } from "@/types/maps";
 
 import { groupMunicipiosByState } from "./territoriosData";
+import type { StateGroup } from "./territoriosData";
 
 type SelectedArea = AreaProperties & { metric: number };
-type SortKey = "name" | "metric" | "count";
+
+/** Sort options shown in the SegmentedControl for each drill level. */
+type NacionalSort = "name" | "count" | "metric";
+type EstadoSort = "name" | "metric";
 
 const EMPTY_FC: AreasResponse = { type: "FeatureCollection", features: [] };
 
 const pct = (m: number) => `${(Math.max(0, Math.min(1, m)) * 100).toFixed(1)}%`;
+
+// ---- Column definitions (memoised outside component to be stable) ----
+
+const STATE_COLUMNS: Column<StateGroup>[] = [
+  {
+    key: "name",
+    header: "Estado",
+    sortValue: (r) => r.name,
+    render: (r) => (
+      <span className="font-medium text-ink">{r.name}</span>
+    ),
+  },
+  {
+    key: "count",
+    header: "Municipios",
+    align: "right",
+    sortValue: (r) => r.count,
+    render: (r) => (
+      <span className="font-mono tabular-nums text-teal">{r.count}</span>
+    ),
+  },
+  {
+    key: "metric",
+    header: "Métrica",
+    align: "right",
+    hideOnCard: true,
+    sortValue: (r) => r.metric,
+    render: (r) => (
+      <span className="font-mono tabular-nums text-ink-muted">{pct(r.metric)}</span>
+    ),
+  },
+];
+
+function makeMuniColumns(): Column<AreaFeature>[] {
+  return [
+    {
+      key: "name",
+      header: "Municipio",
+      sortValue: (f) => f.properties.name,
+      render: (f) => (
+        <span className="font-medium text-ink">{f.properties.name}</span>
+      ),
+    },
+    {
+      key: "code",
+      header: "Clave",
+      align: "center",
+      hideOnCard: true,
+      render: (f) => (
+        <span className="font-mono text-[11px] text-ink-faint">{f.properties.code ?? "—"}</span>
+      ),
+    },
+    {
+      key: "metric",
+      header: "Métrica",
+      align: "right",
+      sortValue: (f) => sampleMetric(f.properties.id),
+      render: (f) => (
+        <span className="font-mono tabular-nums text-teal">{pct(sampleMetric(f.properties.id))}</span>
+      ),
+    },
+  ];
+}
+
+const NACIONAL_SORT_OPTIONS: { id: NacionalSort; label: string }[] = [
+  { id: "name", label: "Nombre" },
+  { id: "count", label: "Municipios" },
+  { id: "metric", label: "Métrica" },
+];
+
+const ESTADO_SORT_OPTIONS: { id: EstadoSort; label: string }[] = [
+  { id: "name", label: "Nombre" },
+  { id: "metric", label: "Métrica" },
+];
+
+// ---- Main component ----
 
 export function TerritoriosPage() {
   // Drill state: null = Nacional (states), otherwise a state name (GADM NAME_1,
   // i.e. the `code` carried by every municipio feature).
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [nacSort, setNacSort] = useState<NacionalSort>("name");
+  const [estSort, setEstSort] = useState<EstadoSort>("name");
   const [selected, setSelected] = useState<SelectedArea | null>(null);
   const [fitKey, setFitKey] = useState(0);
 
@@ -50,7 +136,6 @@ export function TerritoriosPage() {
   );
 
   // National roll-up: distinct state names (municipio `code`) + municipio counts.
-  // This is self-consistent (we never join to the 32-state name layer).
   const stateGroups = useMemo(
     () => groupMunicipiosByState(muniFeatures),
     [muniFeatures],
@@ -95,12 +180,12 @@ export function TerritoriosPage() {
       ? stateGroups.filter((g) => g.name.toLowerCase().includes(q))
       : stateGroups.slice();
     rows.sort((a, b) => {
-      if (sortKey === "count") return b.count - a.count;
-      if (sortKey === "metric") return b.metric - a.metric;
+      if (nacSort === "count") return b.count - a.count;
+      if (nacSort === "metric") return b.metric - a.metric;
       return a.name.localeCompare(b.name, "es");
     });
     return rows;
-  }, [stateGroups, q, sortKey]);
+  }, [stateGroups, q, nacSort]);
 
   // ---- State list: that state's municipios ----
   const filteredMunicipios = useMemo(() => {
@@ -110,13 +195,13 @@ export function TerritoriosPage() {
         )
       : stateMunicipios.slice();
     rows.sort((a, b) => {
-      if (sortKey === "metric") {
+      if (estSort === "metric") {
         return sampleMetric(b.properties.id) - sampleMetric(a.properties.id);
       }
       return a.properties.name.localeCompare(b.properties.name, "es");
     });
     return rows;
-  }, [stateMunicipios, q, sortKey]);
+  }, [stateMunicipios, q, estSort]);
 
   const selectMunicipio = (props: AreaProperties) => {
     setSelected({ ...props, metric: sampleMetric(props.id) });
@@ -130,7 +215,7 @@ export function TerritoriosPage() {
       ? stateMunicipios.length === 0
       : stateGroups.length === 0);
 
-  // Top-5 states by municipio count — real distribution for the bar chart.
+  // Top-8 states by municipio count — real distribution for the bar chart.
   const topStates = useMemo(
     () =>
       stateGroups
@@ -140,6 +225,10 @@ export function TerritoriosPage() {
         .map((g) => ({ name: g.name, count: g.count })),
     [stateGroups],
   );
+
+  // Stable muni columns — recreated only when selectMunicipio identity changes
+  // (it doesn't — it's stable). onRowClick is passed separately to DataTable.
+  const muniColumns = useMemo(() => makeMuniColumns(), []);
 
   return (
     <AppLayout title="Territorios & Secciones" crumb="Inteligencia Electoral">
@@ -169,7 +258,7 @@ export function TerritoriosPage() {
           </>
         }
       >
-        {/* Breadcrumb hierarchy */}
+        {/* Breadcrumb hierarchy — accessible with focus-ring */}
         <nav
           aria-label="Jerarquía territorial"
           className="inline-flex items-center gap-1 rounded-xl border border-line bg-panel/60 p-1 font-mono text-sm backdrop-blur"
@@ -178,7 +267,7 @@ export function TerritoriosPage() {
             type="button"
             onClick={() => setSelectedState(null)}
             aria-current={selectedState ? undefined : "page"}
-            className={`rounded-lg px-3 py-1.5 transition-all ${
+            className={`focus-ring rounded-lg px-3 py-1.5 transition-all ${
               selectedState
                 ? "text-ink-muted hover:text-ink hover:bg-panel-hover/60"
                 : "bg-accent/15 text-accent shadow-glow-accent"
@@ -202,49 +291,60 @@ export function TerritoriosPage() {
         </nav>
       </PageHeader>
 
-      {/* Real-count stats */}
-      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <MetricCard
-          label="Estados"
-          value="—"
-          countTo={stateGroups.length}
-          icon={<MapIcon width={18} height={18} />}
-          tone="accent"
-          delay={80}
-        />
-        <MetricCard
-          label="Municipios (nacional)"
-          value="—"
-          countTo={muniFeatures.length}
-          icon={<LayersIcon className="h-[18px] w-[18px]" />}
-          tone="teal"
-          delay={140}
-        />
-        <MetricCard
-          label={
-            selectedState
-              ? `Municipios · ${selectedState}`
-              : "Municipios del estado"
-          }
-          value={selectedState ? "—" : "0"}
-          countTo={selectedState ? stateMunicipios.length : 0}
-          icon={<MapIcon width={18} height={18} />}
-          tone="warning"
-          delay={200}
-        />
-      </div>
+      {/* Real-count stats — error display deferred to the drill-list DataState */}
+      <DataState
+        loading={loading}
+        error={null}
+        skeleton={
+          <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-20 animate-pulse rounded-card bg-panel-hover" />
+            ))}
+          </div>
+        }
+      >
+        <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <MetricCard
+            label="Estados"
+            value="—"
+            countTo={stateGroups.length}
+            icon={<MapIcon width={18} height={18} />}
+            tone="accent"
+            delay={80}
+          />
+          <MetricCard
+            label="Municipios (nacional)"
+            value="—"
+            countTo={muniFeatures.length}
+            icon={<LayersIcon className="h-[18px] w-[18px]" />}
+            tone="teal"
+            delay={140}
+          />
+          <MetricCard
+            label={
+              selectedState
+                ? `Municipios · ${selectedState}`
+                : "Municipios del estado"
+            }
+            value={selectedState ? "—" : "0"}
+            countTo={selectedState ? stateMunicipios.length : 0}
+            icon={<MapIcon width={18} height={18} />}
+            tone="warning"
+            delay={200}
+          />
+        </div>
+      </DataState>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_400px]">
         {/* LEFT — scoped map */}
         <div
-          className="reveal hud-corners relative h-[460px] overflow-hidden rounded-card border border-line-strong bg-panel shadow-panel"
+          className={`reveal hud-corners relative overflow-hidden rounded-card border border-line-strong bg-panel shadow-panel ${PANEL_HEIGHTS.mapTall}`}
           style={{ animationDelay: "120ms" }}
         >
           <DataState
             loading={loading}
-            error={error}
+            error={null}
             isEmpty={isEmpty}
-            onRetry={reload}
             emptyMessage="Sin cartografía para este ámbito."
             skeleton={
               <div className="h-full w-full animate-pulse bg-panel-hover" />
@@ -262,7 +362,7 @@ export function TerritoriosPage() {
                   // state level they pick a municipio detail.
                   if (!p) return setSelected(null);
                   if (!selectedState) setSelectedState(p.code ?? null);
-                  else setSelected(p);
+                  else selectMunicipio(p);
                 }}
               />
               <div
@@ -284,9 +384,10 @@ export function TerritoriosPage() {
 
         {/* RIGHT — drill list */}
         <div
-          className="reveal card-premium flex h-[460px] flex-col p-0"
+          className={`reveal card-premium flex flex-col p-0 ${PANEL_HEIGHTS.mapTall}`}
           style={{ animationDelay: "180ms" }}
         >
+          {/* Search + sort controls */}
           <div className="space-y-2 border-b border-line p-3">
             <div className="relative">
               <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
@@ -296,148 +397,118 @@ export function TerritoriosPage() {
                 placeholder={
                   selectedState ? "Buscar municipio…" : "Buscar estado…"
                 }
+                aria-label={selectedState ? "Buscar municipio" : "Buscar estado"}
                 className="field-input !py-2 pl-9"
               />
             </div>
-            <div className="flex items-center gap-1 text-[11px]">
-              <span className="text-ink-faint">Ordenar:</span>
-              <SortPill
-                active={sortKey === "name"}
-                onClick={() => setSortKey("name")}
-              >
-                Nombre
-              </SortPill>
-              {!selectedState && (
-                <SortPill
-                  active={sortKey === "count"}
-                  onClick={() => setSortKey("count")}
-                >
-                  Municipios
-                </SortPill>
-              )}
-              <SortPill
-                active={sortKey === "metric"}
-                onClick={() => setSortKey("metric")}
-              >
-                Métrica
-              </SortPill>
-            </div>
+            {/* SegmentedControl replaces ad-hoc SortPill row */}
+            {selectedState ? (
+              <SegmentedControl
+                options={ESTADO_SORT_OPTIONS}
+                value={estSort}
+                onChange={setEstSort}
+                ariaLabel="Ordenar municipios"
+                size="sm"
+              />
+            ) : (
+              <SegmentedControl
+                options={NACIONAL_SORT_OPTIONS}
+                value={nacSort}
+                onChange={setNacSort}
+                ariaLabel="Ordenar estados"
+                size="sm"
+              />
+            )}
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          {/* Scrollable drill list — DataTable handles pagination + sort glyphs */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
             <DataState
               loading={loading}
               error={error}
               isEmpty={isEmpty}
               onRetry={reload}
               emptyMessage="Sin cartografía para este ámbito."
-              skeleton={
-                <div className="space-y-2 p-1">
-                  {Array.from({ length: 7 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="h-12 animate-pulse rounded-lg bg-panel-hover"
-                    />
-                  ))}
-                </div>
-              }
+              skeleton={<div className="p-3"><SkeletonRows rows={8} /></div>}
             >
               {selectedState ? (
                 // ---- Level 2: municipios of the selected state ----
-                filteredMunicipios.length === 0 ? (
-                  <Empty query={search} />
-                ) : (
-                  <ul className="space-y-1">
-                    {filteredMunicipios.map((f) => {
-                      const p = f.properties;
-                      const m = sampleMetric(p.id);
-                      const active = selected?.id === p.id;
-                      return (
-                        <li key={p.id}>
-                          <button
-                            type="button"
-                            onClick={() => selectMunicipio(p)}
-                            aria-pressed={active}
-                            className={`flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition-all ${
-                              active
-                                ? "border-accent/40 bg-accent/10 shadow-glow-accent"
-                                : "border-transparent hover:border-line hover:bg-panel-hover/60"
-                            }`}
-                          >
-                            <span className="min-w-0">
-                              <span className="block truncate text-sm font-medium text-ink">
-                                {p.name}
-                              </span>
-                              <span className="mt-0.5 block font-mono text-[11px] text-ink-faint">
-                                {p.code}
-                              </span>
-                            </span>
-                            <span className="shrink-0 font-mono text-xs text-teal">
-                              {pct(m)}
-                            </span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )
-              ) : // ---- Level 1: states present ----
-              filteredStates.length === 0 ? (
-                <Empty query={search} />
+                <DataTable<AreaFeature>
+                  columns={muniColumns}
+                  rows={filteredMunicipios}
+                  rowKey={(f) => f.properties.id}
+                  pageSize={15}
+                  defaultSortKey="name"
+                  defaultSortDir="asc"
+                  emptyMessage={
+                    q ? `Nada coincide con "${q}".` : "Sin municipios para este estado."
+                  }
+                  onRowClick={(f) => selectMunicipio(f.properties)}
+                />
               ) : (
-                <ul className="space-y-1">
-                  {filteredStates.map((g) => (
-                    <li key={g.name}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedState(g.name)}
-                        className="flex w-full items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-2 text-left transition-all hover:border-line hover:bg-panel-hover/60"
-                      >
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-medium text-ink">
-                            {g.name}
-                          </span>
-                          <span className="mt-0.5 block font-mono text-[11px] text-ink-faint">
-                            {g.count} municipios
-                          </span>
-                        </span>
-                        <span className="pill shrink-0 border-accent/30 text-[10px] text-accent">
-                          Abrir →
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                // ---- Level 1: states present ----
+                <DataTable<StateGroup>
+                  columns={STATE_COLUMNS}
+                  rows={filteredStates}
+                  rowKey={(g) => g.name}
+                  pageSize={20}
+                  defaultSortKey="name"
+                  defaultSortDir="asc"
+                  emptyMessage={
+                    q ? `Nada coincide con "${q}".` : "Sin estados disponibles."
+                  }
+                  onRowClick={(g) => setSelectedState(g.name)}
+                />
               )}
             </DataState>
           </div>
+
+          {/* Distrito / Sección levels — honest "Ingesta pendiente" empty state */}
+          {selectedState && (
+            <div className="border-t border-line px-4 py-2.5">
+              <p className="text-[11px] text-ink-faint">
+                <span className="font-semibold text-ink-muted">Distritos · Secciones:</span>{" "}
+                Ingesta pendiente — cartografía a nivel distrito/sección no disponible aún.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Distribution: top states by municipio count (real) */}
-      {!selectedState && topStates.length > 0 && (
-        <Card
-          title="Estados con más municipios"
-          accentDot
-          className="reveal mt-4"
+      {!selectedState && (
+        <DataState
+          loading={loading}
+          error={null}
+          isEmpty={topStates.length === 0}
+          emptyMessage="Sin datos de distribución disponibles."
+          skeleton={
+            <div className="mt-4 h-48 animate-pulse rounded-card bg-panel-hover" />
+          }
         >
-          <p className="mb-3 -mt-2 text-xs text-ink-muted">
-            Conteo real de municipios por estado (top 8) — derivado de{" "}
-            <span className="font-mono text-ink">
-              <AnimatedNumber
-                value={muniFeatures.length}
-                className="tabular-nums"
-              />
-            </span>{" "}
-            municipios reales.
-          </p>
-          <StackedBars
-            data={topStates}
-            xKey="name"
-            height={180}
-            series={[{ key: "count", color: "#22d3ee" }]}
-          />
-        </Card>
+          <Card
+            title="Estados con más municipios"
+            accentDot
+            className="reveal mt-4"
+          >
+            <p className="mb-3 -mt-2 text-xs text-ink-muted">
+              Conteo real de municipios por estado (top 8) — derivado de{" "}
+              <span className="font-mono text-ink">
+                <AnimatedNumber
+                  value={muniFeatures.length}
+                  className="tabular-nums"
+                />
+              </span>{" "}
+              municipios reales.
+            </p>
+            <StackedBars
+              data={topStates}
+              xKey="name"
+              height={180}
+              series={[{ key: "count", color: CHART_PALETTE[0] }]}
+            />
+          </Card>
+        </DataState>
       )}
 
       {/* Selected municipio detail */}
@@ -489,45 +560,13 @@ export function TerritoriosPage() {
           <button
             type="button"
             onClick={() => setSelected(null)}
-            className="btn-ghost shrink-0"
+            aria-label="Limpiar selección de municipio"
+            className="btn-ghost shrink-0 focus-ring"
           >
             Limpiar selección
           </button>
         </div>
       )}
     </AppLayout>
-  );
-}
-
-function SortPill({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`rounded-md px-2 py-0.5 transition-colors ${
-        active
-          ? "bg-accent/15 text-accent"
-          : "text-ink-muted hover:text-ink hover:bg-panel-hover/60"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Empty({ query }: { query: string }) {
-  return (
-    <div className="grid h-full place-items-center px-4 text-center text-sm text-ink-faint">
-      Nada coincide con “{query}”.
-    </div>
   );
 }
