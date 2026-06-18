@@ -8,6 +8,8 @@ import {
   YAxis,
 } from "recharts";
 
+import { CHART_TOOLTIP_STYLE } from "@/constants/ui";
+
 export interface CoverageDatum {
   level: string;
   count: number;
@@ -36,13 +38,7 @@ export function CoverageBars({ data, height = 200 }: { data: CoverageDatum[]; he
           />
           <Tooltip
             cursor={{ fill: "rgba(34,211,238,0.08)" }}
-            contentStyle={{
-              background: "#06090c",
-              border: "1px solid #223a44",
-              borderRadius: 10,
-              color: "#e6f2f5",
-              fontSize: 12,
-            }}
+            contentStyle={CHART_TOOLTIP_STYLE}
           />
           <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={16}>
             {data.map((_, i) => (
