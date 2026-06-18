@@ -9,11 +9,9 @@ import { getIeemDataset } from "@/api/intel";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
-import { DataState } from "@/components/ui/DataState";
 import { MetricCard } from "@/components/ui/MetricCard";
-import { SkeletonCard } from "@/components/ui/SkeletonCard";
 import { DatabaseIcon, LayersIcon, SettingsIcon } from "@/components/ui/icons";
-import { KIND_BADGE, TONE_BADGE } from "@/constants/ui";
+import { KIND_BADGE, TONE_BADGE, type Tone } from "@/constants/ui";
 import {
   INTEGRATIONS,
   STATUS_META,
@@ -70,12 +68,14 @@ function StatusPill({ status }: { status: IntegrationStatus }) {
 /** Derive a TONE_BADGE class for the format chip via KIND_BADGE. */
 function formatPillClass(format: string): string {
   const lower = format.toLowerCase();
-  let kind = "neutral";
+  let kind: string | undefined;
   if (lower.startsWith("api")) kind = "api";
   else if (lower.startsWith("geojson")) kind = "geojson";
   else if (lower.startsWith("wms")) kind = "wms";
   else if (lower.startsWith("ckan")) kind = "ckan";
-  const tone = KIND_BADGE[kind] ?? "neutral";
+  // KIND_BADGE has no "neutral" key — always resolve to a real Tone so the
+  // returned class is never "pill undefined".
+  const tone: Tone = (kind !== undefined ? KIND_BADGE[kind] : undefined) ?? "neutral";
   return `pill ${TONE_BADGE[tone]}`;
 }
 
@@ -274,7 +274,7 @@ export function ConfiguracionPage() {
         />
       </div>
 
-      {/* Integraciones status board — wrapped in DataState for graceful degradation */}
+      {/* Integraciones status board — static constant, rendered directly */}
       <section className="mt-8 reveal" style={{ animationDelay: "80ms" }}>
         <div className="mb-4 flex items-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-accent-gradient shadow-glow" />
@@ -291,45 +291,30 @@ export function ConfiguracionPage() {
           navegador nunca almacena secretos.
         </p>
 
-        {/* DataState provides degraded-error UI + retry if status fetch ever becomes async (P-2). */}
-        <DataState
-          loading={false}
-          error={null}
-          isEmpty={INTEGRATIONS.length === 0}
-          emptyMessage="No hay fuentes registradas."
-          skeleton={
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <SkeletonCard key={i} lines={2} />
-              ))}
-            </div>
-          }
-        >
-          <div className="flex flex-col gap-6">
-            {grouped.map(({ status, items }) => (
-              <div key={status}>
-                <div className="eyebrow mb-2 flex items-center gap-2">
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${STATUS_META[status].dot}`}
-                    aria-hidden="true"
-                  />
-                  {STATUS_META[status].label} · {items.length}
-                </div>
-                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                  {items.map((source, idx) => (
-                    <div
-                      key={source.key}
-                      className="reveal"
-                      style={{ animationDelay: `${60 + idx * 40}ms` }}
-                    >
-                      <IntegrationRow source={source} />
-                    </div>
-                  ))}
-                </div>
+        <div className="flex flex-col gap-6">
+          {grouped.map(({ status, items }) => (
+            <div key={status}>
+              <div className="eyebrow mb-2 flex items-center gap-2">
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${STATUS_META[status].dot}`}
+                  aria-hidden="true"
+                />
+                {STATUS_META[status].label} · {items.length}
               </div>
-            ))}
-          </div>
-        </DataState>
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                {items.map((source, idx) => (
+                  <div
+                    key={source.key}
+                    className="reveal"
+                    style={{ animationDelay: `${60 + idx * 40}ms` }}
+                  >
+                    <IntegrationRow source={source} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* Export hub */}
