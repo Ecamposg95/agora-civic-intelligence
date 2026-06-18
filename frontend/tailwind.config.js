@@ -34,20 +34,17 @@ export default {
         mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       boxShadow: {
-        panel: "0 0 0 1px rgba(34,211,238,0.04), 0 18px 50px -24px rgba(0,0,0,0.9)",
-        glow: "0 0 24px -6px rgba(34,211,238,0.6)",
-        "glow-accent":
-          "0 0 0 1px rgba(34,211,238,0.22), 0 0 44px -12px rgba(34,211,238,0.50)",
-        "glow-teal":
-          "0 0 0 1px rgba(45,212,191,0.20), 0 0 44px -12px rgba(45,212,191,0.40)",
-        "glow-amber":
-          "0 0 0 1px rgba(245,181,61,0.22), 0 0 44px -12px rgba(245,181,61,0.45)",
-        "card-hover": "0 0 0 1px rgba(34,211,238,0.18), 0 30px 80px -30px rgba(0,0,0,0.95)",
+        panel: "var(--shadow-panel)",
+        glow: "var(--glow-accent)",
+        "glow-accent": "var(--glow-accent)",
+        "glow-teal": "var(--glow-teal)",
+        "glow-amber": "var(--glow-amber)",
+        "card-hover": "var(--shadow-card-hover)",
       },
       backgroundImage: {
         mesh:
           "radial-gradient(55% 50% at 12% -5%, rgba(34,211,238,0.10), transparent 60%), radial-gradient(45% 45% at 100% 0%, rgba(245,181,61,0.06), transparent 55%)",
-        "accent-gradient": "linear-gradient(135deg, #22d3ee 0%, #2dd4bf 100%)",
+        "accent-gradient": "var(--accent-gradient)",
         sheen:
           "linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.06) 50%, transparent 70%)",
       },
