@@ -1,5 +1,5 @@
 // frontend/src/components/ui/DataTable.tsx
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { pageCount, pageRangeLabel, paginate, sortRows, type SortDir } from "@/lib/table";
 
@@ -49,6 +49,14 @@ export function DataTable<T>({
   const [sortKey, setSortKey] = useState<string | null>(defaultSortKey ?? null);
   const [sortDir, setSortDir] = useState<SortDir>(defaultSortDir);
   const [page, setPage] = useState(1);
+
+  // Reset to page 1 whenever the row count changes (e.g. filter applied/cleared).
+  // Depend on rows.length — NOT rows reference — so callers that pass freshly-
+  // computed inline arrays each render (UsersPage, OrgsPage, PadronPage, etc.)
+  // don't get reset on every render.
+  useEffect(() => {
+    setPage(1);
+  }, [rows.length]);
 
   const sorted = useMemo(() => {
     const col = columns.find((c) => c.key === sortKey);

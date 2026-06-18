@@ -37,10 +37,10 @@ const compact = new Intl.NumberFormat("es-MX", { notation: "compact", maximumFra
 const nf = new Intl.NumberFormat("es-MX");
 const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
 
-// Sex-split colors are semantically meaningful — keep as defined in fixtures,
-// do NOT swap to CHART_PALETTE generics.
-const SEX_HOMBRES = "#22d3ee";
-const SEX_MUJERES = "#2dd4bf";
+// Derive sex-split colors from the fixture so bar chart, legend, and pie chart
+// stay in sync automatically when the palette is updated in one place.
+const SEX_HOMBRES = SEX_DISTRIBUTION.find((s) => s.sex === "Hombres")!.color;
+const SEX_MUJERES = SEX_DISTRIBUTION.find((s) => s.sex === "Mujeres")!.color;
 
 type Tab = "demografia" | "cobertura" | "tendencia";
 
