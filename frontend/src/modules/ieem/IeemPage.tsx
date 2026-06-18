@@ -3,7 +3,6 @@ import { useMemo, useState } from "react";
 import { getIeemDataset, getIeemDatasets } from "@/api/intel";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Card } from "@/components/ui/Card";
 import type { Column } from "@/components/ui/DataTable";
 import { DataTable } from "@/components/ui/DataTable";
 import { DataState } from "@/components/ui/DataState";
@@ -169,54 +168,53 @@ export function IeemPage() {
         </div>
       </div>
 
-      {/* ── Dataset table card ── */}
-      <div className="reveal" style={{ animationDelay: "80ms" }}>
-        <Card
-          title={data?.label ?? "Dataset"}
-          accentDot
-          className="card-premium hud-corners !p-0 overflow-hidden"
-          action={
-            data && !loading && !error ? (
-              <span className="pill border-line text-ink-muted">
-                {filteredRows.length} de {data.count} filas
-              </span>
-            ) : undefined
+      {/* ── Dataset table — plain header above DataTable (DataTable renders its own .card-premium) ── */}
+      <div className="reveal hud-corners" style={{ animationDelay: "80ms" }}>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <span className="flex items-center gap-2 text-sm font-semibold tracking-tight text-ink">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent-gradient shadow-glow" aria-hidden="true" />
+            {data?.label ?? "Dataset"}
+          </span>
+          {data && !loading && !error && (
+            <span className="pill border-line text-ink-muted">
+              {filteredRows.length} de {data.count} filas
+            </span>
+          )}
+        </div>
+
+        <DataState
+          loading={loading}
+          error={error}
+          onRetry={reload}
+          isEmpty={!loading && !error && !!data && data.rows.length === 0}
+          emptyMessage="El dataset no devolvió filas."
+          skeleton={
+            <div className="card-premium p-4">
+              <SkeletonRows rows={8} />
+            </div>
           }
         >
-          <DataState
-            loading={loading}
-            error={error}
-            onRetry={reload}
-            isEmpty={!loading && !error && !!data && data.rows.length === 0}
-            emptyMessage="El dataset no devolvió filas."
-            skeleton={
-              <div className="p-4">
-                <SkeletonRows rows={8} />
-              </div>
-            }
-          >
-            {data && columns.length > 0 && (
-              <>
-                <DataTable<IndexedRow>
-                  columns={columns}
-                  rows={filteredRows}
-                  rowKey={(r) => r.__idx}
-                  pageSize={25}
-                  emptyMessage={
-                    q.trim()
-                      ? `Ninguna fila coincide con "${q}".`
-                      : "El dataset no devolvió filas."
-                  }
-                  defaultSortKey={data.columns[0]}
-                  defaultSortDir="asc"
-                />
-                <p className="border-t border-line px-4 py-3 text-[11px] text-ink-faint">
-                  Fuente: {data.source}
-                </p>
-              </>
-            )}
-          </DataState>
-        </Card>
+          {data && columns.length > 0 && (
+            <>
+              <DataTable<IndexedRow>
+                columns={columns}
+                rows={filteredRows}
+                rowKey={(r) => r.__idx}
+                pageSize={25}
+                emptyMessage={
+                  q.trim()
+                    ? `Ninguna fila coincide con "${q}".`
+                    : "El dataset no devolvió filas."
+                }
+                defaultSortKey={data.columns[0]}
+                defaultSortDir="asc"
+              />
+              <p className="mt-2 px-1 text-[11px] text-ink-faint">
+                Fuente: {data.source}
+              </p>
+            </>
+          )}
+        </DataState>
       </div>
     </AppLayout>
   );

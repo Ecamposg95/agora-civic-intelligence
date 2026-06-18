@@ -430,13 +430,14 @@ function EntityTable({ entities }: { entities: EntityEconomy[] }) {
 
   return (
     <div className="reveal mt-5" style={{ animationDelay: "280ms" }}>
-      <Card
-        title="Indicadores por entidad"
-        accentDot
-        action={<span className="pill border-line text-ink-muted">muestra</span>}
-      >
-        {/* Search filter above the DataTable */}
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      {/* Plain header row — DataTable renders its own .card-premium, no wrapping Card needed. */}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-ink">
+          <span className="h-1.5 w-1.5 rounded-full bg-accent-gradient shadow-glow" aria-hidden="true" />
+          Indicadores por entidad
+          <span className="pill border-line text-ink-muted">muestra</span>
+        </h2>
+        <div className="flex flex-wrap items-center gap-3">
           <input
             type="search"
             value={query}
@@ -449,17 +450,17 @@ function EntityTable({ entities }: { entities: EntityEconomy[] }) {
             {filtered.length} de {entities.length} entidades
           </span>
         </div>
+      </div>
 
-        <DataTable<EntityEconomy>
-          columns={ENTITY_COLUMNS}
-          rows={filtered}
-          rowKey={(e) => e.entity}
-          defaultSortKey="pib"
-          defaultSortDir="desc"
-          emptyMessage={`Sin coincidencias para "${query}".`}
-          pageSize={16}
-        />
-      </Card>
+      <DataTable<EntityEconomy>
+        columns={ENTITY_COLUMNS}
+        rows={filtered}
+        rowKey={(e) => e.entity}
+        defaultSortKey="pib"
+        defaultSortDir="desc"
+        emptyMessage={`Sin coincidencias para "${query}".`}
+        pageSize={16}
+      />
     </div>
   );
 }

@@ -217,12 +217,14 @@ function UnitsTable({ units }: { units: SampleUnit[] }) {
 
   return (
     <div className="reveal mt-5" style={{ animationDelay: "280ms" }}>
-      <Card
-        title="Unidades geolocalizadas (muestra)"
-        accentDot
-        action={<span className="pill border-line text-ink-muted">{units.length} registros</span>}
-      >
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      {/* Plain header row — DataTable renders its own .card-premium, no wrapping Card needed. */}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-ink">
+          <span className="h-1.5 w-1.5 rounded-full bg-accent-gradient shadow-glow" aria-hidden="true" />
+          Unidades geolocalizadas
+          <span className="pill border-line text-ink-muted">muestra</span>
+        </h2>
+        <div className="flex flex-wrap items-center gap-3">
           {/* P-7: aria-label + focus-ring on search input. */}
           <input
             type="search"
@@ -233,20 +235,20 @@ function UnitsTable({ units }: { units: SampleUnit[] }) {
             className="field-input focus-ring max-w-sm"
           />
           <span className="pill border-line text-ink-muted">
-            {rows.length} de {units.length}
+            {rows.length} de {units.length} registros
           </span>
         </div>
+      </div>
 
-        <DataTable<SampleUnit>
-          columns={UNIT_COLUMNS}
-          rows={rows}
-          rowKey={(u) => u.id}
-          defaultSortKey="name"
-          defaultSortDir="asc"
-          emptyMessage={`Sin coincidencias para "${query}".`}
-          pageSize={12}
-        />
-      </Card>
+      <DataTable<SampleUnit>
+        columns={UNIT_COLUMNS}
+        rows={rows}
+        rowKey={(u) => u.id}
+        defaultSortKey="name"
+        defaultSortDir="asc"
+        emptyMessage={`Sin coincidencias para "${query}".`}
+        pageSize={12}
+      />
     </div>
   );
 }
