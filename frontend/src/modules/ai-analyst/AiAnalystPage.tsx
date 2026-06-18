@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { PreviewBanner } from "@/components/modules/PreviewBanner";
 import { Card } from "@/components/ui/Card";
 import { AiIcon } from "@/components/ui/icons";
+import { PANEL_HEIGHTS } from "@/constants/ui";
 import { ask, type Answer } from "./client";
 import { SUGGESTED } from "./fixtures";
 
@@ -39,18 +40,33 @@ export function AiAnalystPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="reveal lg:col-span-2" style={{ animationDelay: "120ms" }}>
           <Card title="Copiloto" accentDot className="h-full">
-            <div className="flex h-[440px] flex-col">
+            <div className={`flex ${PANEL_HEIGHTS.copilot} flex-col`}>
               <div className="flex-1 space-y-3 overflow-y-auto pr-1">
                 {turns.length === 0 && (
-                  <div className="grid h-full place-items-center text-center text-sm text-ink-faint">
+                  <div className="flex h-full flex-col items-center justify-center gap-4 px-4 text-center">
+                    <span className="metric-chip h-14 w-14 text-accent shadow-glow-accent">
+                      <AiIcon width={28} height={28} />
+                    </span>
                     <div>
-                      <span className="metric-chip mx-auto mb-3 h-12 w-12 text-accent shadow-glow-accent">
-                        <AiIcon width={24} height={24} />
-                      </span>
-                      <p className="text-ink-muted">Pregúntale al copiloto sobre tus datos.</p>
-                      <p className="mt-1 text-xs text-ink-faint">
-                        Usa una pregunta sugerida o escribe la tuya.
+                      <p className="text-sm font-medium text-ink">Copiloto de Análisis Cívico</p>
+                      <p className="mt-1 max-w-xs text-xs leading-relaxed text-ink-faint">
+                        Consulta participación, cobertura territorial, auditoría y más en lenguaje natural.
+                        Respuestas de muestra — conecta Claude API para análisis en vivo.
                       </p>
+                    </div>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {SUGGESTED.map((q) => (
+                        <button
+                          key={q}
+                          type="button"
+                          disabled={busy}
+                          onClick={() => setInput(q)}
+                          className="focus-ring rounded-full border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs text-accent transition-colors hover:border-accent/60 hover:bg-accent/20 disabled:opacity-40"
+                          aria-label={`Usar pregunta: ${q}`}
+                        >
+                          {q}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -123,7 +139,7 @@ export function AiAnalystPage() {
                   key={q}
                   onClick={() => send(q)}
                   disabled={busy}
-                  className="reveal group flex w-full items-start gap-2.5 rounded-lg border border-line bg-bg-sunken px-3 py-2.5 text-left text-sm text-ink-muted transition-all hover:-translate-y-0.5 hover:border-accent/40 hover:bg-panel-hover hover:text-ink disabled:opacity-40"
+                  className="focus-ring reveal group flex w-full items-start gap-2.5 rounded-lg border border-line bg-bg-sunken px-3 py-2.5 text-left text-sm text-ink-muted transition-all hover:-translate-y-0.5 hover:border-accent/40 hover:bg-panel-hover hover:text-ink disabled:opacity-40"
                   style={{ animationDelay: `${260 + i * 60}ms` }}
                 >
                   <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent transition-colors group-hover:bg-teal" />
