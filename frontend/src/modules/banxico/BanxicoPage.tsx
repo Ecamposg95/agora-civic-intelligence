@@ -44,12 +44,6 @@ const delta = (s: SerieDef): { text: string; up: boolean } | null => {
   return { text, up: diff > 0 };
 };
 
-// Extract numeric chart height from PANEL_HEIGHTS.chartMd token (e.g. "h-[260px]…")
-const DETAIL_CHART_HEIGHT = (() => {
-  const m = PANEL_HEIGHTS.chartMd.match(/h-\[(\d+)px\]/);
-  return m ? parseInt(m[1], 10) : 260;
-})();
-
 // Memoized columns for the series data-point DataTable
 const makeColumns = (s: SerieDef): Column<SeriePoint>[] => [
   {
@@ -87,6 +81,14 @@ export function BanxicoPage() {
       active = false;
     };
   }, []);
+
+  // Sync activeCode to a valid loaded series (keyboard a11y: SegmentedControl
+  // roving-tabindex requires value to match one of the rendered options).
+  useEffect(() => {
+    if (series.length > 0 && !series.some((s) => s.code === activeCode)) {
+      setActiveCode(series[0].code);
+    }
+  }, [series, activeCode]);
 
   const segmentOptions = useMemo<SegmentOption<string>[]>(
     () =>
@@ -143,7 +145,8 @@ export function BanxicoPage() {
                 label={s.label}
                 value={latest ? fmtValue(s, latest.value) : "—"}
                 tone={TONES[i % TONES.length]}
-                delta={d?.up ? d.text : undefined}
+                delta={d?.text}
+                deltaDir={d ? (d.up ? "up" : "down") : undefined}
                 icon={<AnalyticsIcon width={18} height={18} />}
                 delay={i * 80}
               />
@@ -200,7 +203,6 @@ export function BanxicoPage() {
             <div className={PANEL_HEIGHTS.chartMd}>
               <ParticipationChart
                 data={activeSeries.points}
-                height={DETAIL_CHART_HEIGHT}
                 valueFormat={activeSeries.valueFormat}
                 seriesLabel={activeSeries.label}
                 color={SERIES_COLORS[activeSeries.code]}
