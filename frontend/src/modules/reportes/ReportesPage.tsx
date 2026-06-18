@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { DataState } from "@/components/ui/DataState";
 import { MetricCard } from "@/components/ui/MetricCard";
+import { SkeletonCard } from "@/components/ui/SkeletonCard";
 import {
   AnalyticsIcon,
   DatabaseIcon,
@@ -16,6 +17,7 @@ import {
   UserIcon,
   VotersIcon,
 } from "@/components/ui/icons";
+import { PANEL_HEIGHTS } from "@/constants/ui";
 import { useAsync } from "@/hooks/useAsync";
 import type { AnalyticsOverview } from "@/types/analytics";
 
@@ -113,15 +115,20 @@ export function ReportesPage() {
         emptyMessage="Sin datos de plataforma todavía — analítica pendiente."
         skeleton={
           <div className="space-y-4">
+            {/* P-2: SkeletonCard replaces raw animate-pulse divs */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-32 animate-pulse rounded-card bg-panel-hover"
-                />
+                <SkeletonCard key={i} lines={2} />
               ))}
             </div>
-            <div className="h-72 animate-pulse rounded-card bg-panel-hover" />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[360px_1fr]">
+              <SkeletonCard lines={5} />
+              <SkeletonCard lines={1} className="min-h-[200px]" />
+            </div>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <SkeletonCard lines={4} />
+              <SkeletonCard lines={4} />
+            </div>
           </div>
         }
       >
@@ -152,8 +159,9 @@ interface BriefingProps {
  * their source and generation timestamp.
  */
 function Briefing({ overview, stateCount, maxAction, maxActor }: BriefingProps) {
+  // P-8: reveal wraps the primary content block for entrance animation
   return (
-    <div className="space-y-4 print:space-y-3 print:bg-white print:p-0 print:text-black">
+    <div className="reveal space-y-4 print:space-y-3 print:bg-white print:p-0 print:text-black">
       {/* Print-only header (hidden on screen — screen uses PageHeader). */}
       <div className="hidden print:mb-4 print:block print:border-b print:border-black/20 print:pb-3">
         <h1 className="text-2xl font-bold">Ágora · Reporte Ejecutivo</h1>
@@ -248,12 +256,14 @@ function Briefing({ overview, stateCount, maxAction, maxActor }: BriefingProps) 
           {overview.trends.activity.length === 0 ? (
             <p className="text-sm text-ink-faint">Sin actividad registrada.</p>
           ) : (
-            <ParticipationChart
-              data={overview.trends.activity}
-              height={240}
-              valueFormat="number"
-              seriesLabel="Eventos"
-            />
+            // P-6: responsive height via PANEL_HEIGHTS.chartMd instead of hardcoded height={240}
+            <div className={PANEL_HEIGHTS.chartMd}>
+              <ParticipationChart
+                data={overview.trends.activity}
+                valueFormat="number"
+                seriesLabel="Eventos"
+              />
+            </div>
           )}
         </Card>
       </div>
