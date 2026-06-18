@@ -129,9 +129,10 @@ export function DataTable<T>({
               <tr
                 key={rowKey(row)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={`border-b border-line/60 transition-colors hover:bg-panel-hover ${
-                  onRowClick ? "cursor-pointer" : ""
-                }`}
+                tabIndex={onRowClick ? 0 : undefined}
+                role={onRowClick ? "button" : undefined}
+                onKeyDown={onRowClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onRowClick(row); } } : undefined}
+                className={`border-b border-line/60 transition-colors hover:bg-panel-hover ${onRowClick ? "cursor-pointer focus-ring" : ""}`}
               >
                 {columns.map((c) => (
                   <td key={c.key} className={`px-4 py-2.5 text-ink ${alignCls(c.align)}`}>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { getAudit } from "@/api/audit";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -132,6 +132,7 @@ export function AuditoriaPage() {
   const [selected, setSelected] = useState<AuditEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
 
   // Debounce raw inputs → committed filters; reset to first page.
   useEffect(() => {
@@ -145,10 +146,7 @@ export function AuditoriaPage() {
     return () => clearTimeout(t);
   }, [actionInput, entityInput, sinceInput, untilInput]);
 
-  const reload = () => {
-    setAction((a) => a);
-    setOffset((o) => o);
-  };
+  const reload = useCallback(() => setRetryTick((n) => n + 1), []);
 
   useEffect(() => {
     let ignore = false;
@@ -174,7 +172,7 @@ export function AuditoriaPage() {
     return () => {
       ignore = true;
     };
-  }, [offset, action, entityType, since, until]);
+  }, [offset, action, entityType, since, until, retryTick]);
 
   const items = useMemo(() => data?.items ?? [], [data]);
   const hasFilters = Boolean(actionInput || entityInput || sinceInput || untilInput);
@@ -240,7 +238,6 @@ export function AuditoriaPage() {
                   onChange={(e) => setActionInput(e.target.value)}
                   placeholder="auth.login…"
                   className="field-input focus-ring w-full pl-9"
-                  aria-label="Filtrar por acción"
                 />
               </div>
             </label>
@@ -254,7 +251,6 @@ export function AuditoriaPage() {
                 onChange={(e) => setEntityInput(e.target.value)}
                 placeholder="document, report…"
                 className="field-input focus-ring w-full"
-                aria-label="Filtrar por tipo de entidad"
               />
             </label>
 
@@ -267,7 +263,6 @@ export function AuditoriaPage() {
                 value={sinceInput}
                 onChange={(e) => setSinceInput(e.target.value)}
                 className="field-input focus-ring w-full"
-                aria-label="Fecha inicial"
               />
             </label>
 
@@ -280,7 +275,6 @@ export function AuditoriaPage() {
                 value={untilInput}
                 onChange={(e) => setUntilInput(e.target.value)}
                 className="field-input focus-ring w-full"
-                aria-label="Fecha final"
               />
             </label>
 
@@ -311,7 +305,7 @@ export function AuditoriaPage() {
             <span className="h-1.5 w-1.5 rounded-full bg-accent-gradient shadow-glow" aria-hidden="true" />
             Bitácora
           </span>
-          <span className="font-mono text-xs text-ink-muted">
+          <span className={`font-mono text-xs text-ink-muted transition-opacity${loading ? " opacity-40" : ""}`}>
             {data && data.total > 0
               ? `${offset + 1}–${Math.min(offset + PAGE, data.total)} de ${data.total} eventos`
               : ""}
