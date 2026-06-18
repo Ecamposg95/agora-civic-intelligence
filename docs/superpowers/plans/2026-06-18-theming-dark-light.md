@@ -134,6 +134,7 @@ Append these to the `.dark` block (in `index.css`):
 ```css
     --shadow-panel: 0 0 0 1px rgba(34,211,238,0.04), 0 18px 50px -24px rgba(0,0,0,0.9);
     --shadow-card-hover: 0 0 0 1px rgba(34,211,238,0.18), 0 30px 80px -30px rgba(0,0,0,0.95);
+    --glow: 0 0 24px -6px rgba(34,211,238,0.6);
     --glow-accent: 0 0 0 1px rgba(34,211,238,0.22), 0 0 44px -12px rgba(34,211,238,0.50);
     --glow-teal: 0 0 0 1px rgba(45,212,191,0.20), 0 0 44px -12px rgba(45,212,191,0.40);
     --glow-amber: 0 0 0 1px rgba(245,181,61,0.22), 0 0 44px -12px rgba(245,181,61,0.45);
@@ -154,6 +155,7 @@ Append these to the `.light` block:
 ```css
     --shadow-panel: 0 1px 2px rgba(16,24,32,0.06), 0 10px 28px -16px rgba(16,24,32,0.18);
     --shadow-card-hover: 0 1px 2px rgba(16,24,32,0.08), 0 18px 44px -20px rgba(16,24,32,0.22);
+    --glow: 0 0 16px -6px rgba(8,145,178,0.45);
     --glow-accent: 0 0 0 1px rgba(8,145,178,0.30), 0 8px 22px -10px rgba(16,24,32,0.18);
     --glow-teal: 0 0 0 1px rgba(13,148,136,0.28), 0 8px 22px -10px rgba(16,24,32,0.16);
     --glow-amber: 0 0 0 1px rgba(180,83,9,0.28), 0 8px 22px -10px rgba(16,24,32,0.16);
@@ -176,7 +178,7 @@ In `frontend/tailwind.config.js` `theme.extend`, replace the `boxShadow` object 
 ```js
       boxShadow: {
         panel: "var(--shadow-panel)",
-        glow: "var(--glow-accent)",
+        glow: "var(--glow)",
         "glow-accent": "var(--glow-accent)",
         "glow-teal": "var(--glow-teal)",
         "glow-amber": "var(--glow-amber)",
