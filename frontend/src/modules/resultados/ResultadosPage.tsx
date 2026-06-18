@@ -22,10 +22,8 @@ import { PreviewBanner } from "@/components/modules/PreviewBanner";
 import { Card } from "@/components/ui/Card";
 import type { Column } from "@/components/ui/DataTable";
 import { DataTable } from "@/components/ui/DataTable";
-import { DataState } from "@/components/ui/DataState";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
-import { SkeletonCard, SkeletonRows } from "@/components/ui/SkeletonCard";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { RadialGauge } from "@/components/charts/RadialGauge";
 import { AnalyticsIcon, ShieldIcon, VotersIcon } from "@/components/ui/icons";
@@ -41,13 +39,13 @@ const PARTY_COLOR: Record<string, string> = Object.fromEntries(
   PARTY_RESULTS.map((p) => [p.party, p.color]),
 );
 
-// Historical coalition line colors — fixture party colors are explicitly
-// specified in the data so we keep them; only fall back to CHART_PALETTE
-// for any series without an explicit color.
-const COALITION_COLORS = {
-  coalicionA: CHART_PALETTE[0], // #22d3ee (matches fixture Coalición A color)
-  coalicionB: CHART_PALETTE[1], // #f5b53d (matches fixture Coalición B color)
-  coalicionC: CHART_PALETTE[2], // #2dd4bf (matches fixture Coalición C color)
+// Historical coalition line colors sourced from fixture party data so they
+// always stay in sync with the BarChart/PieChart Cell fills above.
+// HISTORICAL keys (coalicionA/B/C) map 1:1 to PARTY_RESULTS[0/1/2].
+const COALITION_COLOR: Record<string, string> = {
+  coalicionA: PARTY_RESULTS[0].color,
+  coalicionB: PARTY_RESULTS[1].color,
+  coalicionC: PARTY_RESULTS[2].color,
 };
 
 type View = "nacional" | "entidad" | "historico";
@@ -106,23 +104,9 @@ export function ResultadosPage() {
         />
       </div>
 
-      {/* Preview fixtures — loading=false, error=null; DataState provides
-          structural consistency if real async is wired up later. */}
-      <DataState
-        loading={false}
-        error={null}
-        skeleton={
-          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <SkeletonCard lines={4} />
-            <SkeletonCard lines={4} />
-            <SkeletonRows rows={8} />
-          </div>
-        }
-      >
-        {view === "nacional" && <NacionalView />}
-        {view === "entidad" && <EntidadView />}
-        {view === "historico" && <HistoricoView />}
-      </DataState>
+      {view === "nacional" && <NacionalView />}
+      {view === "entidad" && <EntidadView />}
+      {view === "historico" && <HistoricoView />}
     </AppLayout>
   );
 }
@@ -395,7 +379,7 @@ function HistoricoView() {
                   type="monotone"
                   dataKey="coalicionA"
                   name="Coalición A"
-                  stroke={COALITION_COLORS.coalicionA}
+                  stroke={COALITION_COLOR.coalicionA}
                   strokeWidth={2}
                   dot={{ r: 3 }}
                 />
@@ -403,7 +387,7 @@ function HistoricoView() {
                   type="monotone"
                   dataKey="coalicionB"
                   name="Coalición B"
-                  stroke={COALITION_COLORS.coalicionB}
+                  stroke={COALITION_COLOR.coalicionB}
                   strokeWidth={2}
                   dot={{ r: 3 }}
                 />
@@ -411,7 +395,7 @@ function HistoricoView() {
                   type="monotone"
                   dataKey="coalicionC"
                   name="Coalición C"
-                  stroke={COALITION_COLORS.coalicionC}
+                  stroke={COALITION_COLOR.coalicionC}
                   strokeWidth={2}
                   dot={{ r: 3 }}
                 />
