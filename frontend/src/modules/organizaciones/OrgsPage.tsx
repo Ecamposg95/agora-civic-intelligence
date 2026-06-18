@@ -1,8 +1,8 @@
 // frontend/src/modules/organizaciones/OrgsPage.tsx
 // Gestión de Organizaciones — superadmin multi-tenant control surface.
-// Lists real organizations from the API and lets a superadmin create or edit
-// tenants (name + slug). Slug collisions surface the backend 409 inline.
-import { useMemo, useState } from "react";
+// Lists real organizations from the API and lets a superadmin create, edit,
+// activate, or deactivate tenants. Slug collisions surface the backend 409.
+import { useCallback, useMemo, useState } from "react";
 
 import {
   createOrganization,
@@ -11,13 +11,17 @@ import {
 } from "@/api/organizations";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { DataState } from "@/components/ui/DataState";
-import { MetricCard } from "@/components/ui/MetricCard";
+import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Modal } from "@/components/ui/Modal";
-import { DatabaseIcon, SettingsIcon, ShieldIcon } from "@/components/ui/icons";
+import { SkeletonRows } from "@/components/ui/SkeletonCard";
+import { DatabaseIcon, ShieldIcon } from "@/components/ui/icons";
+import { TONE_BADGE } from "@/constants/ui";
 import { useAsync } from "@/hooks/useAsync";
-import type { Organization } from "@/types/organizations";
+import type { Organization, OrgUpdatePayload } from "@/types/organizations";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type Editing = { mode: "create" } | { mode: "edit"; org: Organization };
 
@@ -28,33 +32,58 @@ interface FormState {
 
 const EMPTY_FORM: FormState = { name: "", slug: "" };
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 /** Lowercase, hyphenated, ascii-safe slug derived from a name. */
 function slugify(value: string): string {
   return value
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
 
-function StatusPill({ active }: { active: boolean }) {
-  return (
-    <span
-      className={`pill ${
-        active
-          ? "border-teal/30 bg-teal/10 text-teal"
-          : "border-line bg-bg-sunken text-ink-faint"
-      }`}
-    >
+// ─── Static columns (no closure over state) ───────────────────────────────────
+// Client-side data: sortValue IS appropriate — DataTable paginates the full set.
+
+const ORG_STATIC_COLUMNS: Column<Organization>[] = [
+  {
+    key: "name",
+    header: "Nombre",
+    sortValue: (o) => o.name,
+    render: (o) => (
+      <span className="font-medium text-ink">{o.name}</span>
+    ),
+  },
+  {
+    key: "slug",
+    header: "Slug",
+    render: (o) => (
+      <span className="font-mono text-xs text-accent">{o.slug}</span>
+    ),
+  },
+  {
+    key: "is_active",
+    header: "Estado",
+    sortValue: (o) => (o.is_active ? 0 : 1),
+    render: (o) => (
       <span
-        className={`h-1.5 w-1.5 rounded-full ${active ? "bg-teal" : "bg-ink-faint"}`}
-        aria-hidden="true"
-      />
-      {active ? "Activa" : "Inactiva"}
-    </span>
-  );
-}
+        className={`pill ${o.is_active ? TONE_BADGE.ok : TONE_BADGE.neutral}`}
+      >
+        <span
+          className={`h-1.5 w-1.5 rounded-full ${
+            o.is_active ? "bg-teal" : "bg-ink-faint"
+          }`}
+          aria-hidden="true"
+        />
+        {o.is_active ? "Activa" : "Inactiva"}
+      </span>
+    ),
+  },
+];
+
+// ─── Page component ───────────────────────────────────────────────────────────
 
 export function OrgsPage() {
   const orgs = useAsync(() => listOrganizations(), []);
@@ -65,31 +94,33 @@ export function OrgsPage() {
   // Tracks whether the user manually edited the slug, so we stop auto-deriving.
   const [slugTouched, setSlugTouched] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const counts = useMemo(() => {
     const active = items.filter((o) => o.is_active).length;
     return { total: items.length, active, inactive: items.length - active };
   }, [items]);
 
+  // ─── Handlers ───────────────────────────────────────────────────────────────
+
   function openCreate(): void {
     setEditing({ mode: "create" });
     setForm(EMPTY_FORM);
     setSlugTouched(false);
-    setError(null);
+    setModalError(null);
   }
 
   function openEdit(org: Organization): void {
     setEditing({ mode: "edit", org });
     setForm({ name: org.name, slug: org.slug });
     setSlugTouched(true);
-    setError(null);
+    setModalError(null);
   }
 
   function closeModal(): void {
     if (saving) return;
     setEditing(null);
-    setError(null);
+    setModalError(null);
   }
 
   function onNameChange(name: string): void {
@@ -109,11 +140,11 @@ export function OrgsPage() {
     const name = form.name.trim();
     const slug = form.slug.trim();
     if (!name || !slug) {
-      setError("Nombre y slug son obligatorios.");
+      setModalError("Nombre y slug son obligatorios.");
       return;
     }
     setSaving(true);
-    setError(null);
+    setModalError(null);
     try {
       if (editing.mode === "create") {
         await createOrganization({ name, slug });
@@ -125,16 +156,76 @@ export function OrgsPage() {
     } catch (e: unknown) {
       const status = (e as { status?: number }).status;
       if (status === 409) {
-        setError("Ese slug ya está en uso. Elige otro.");
+        setModalError("Ese slug ya está en uso. Elige otro.");
       } else if (status === 403) {
-        setError("No tienes permisos para esta operación.");
+        setModalError("No tienes permisos para esta operación.");
       } else {
-        setError(e instanceof Error ? e.message : "No se pudo guardar.");
+        setModalError(e instanceof Error ? e.message : "No se pudo guardar.");
       }
     } finally {
       setSaving(false);
     }
   }
+
+  const toggleActive = useCallback(
+    async (org: Organization, active: boolean) => {
+      try {
+        const payload: OrgUpdatePayload = { is_active: active };
+        await updateOrganization(org.id, payload);
+        orgs.reload();
+      } catch (e: unknown) {
+        // Surface inline — non-critical action, no full-page error needed.
+        console.error("toggleActive failed", e);
+      }
+    },
+    [orgs],
+  );
+
+  // ─── Actions column (closes over openEdit / toggleActive) ───────────────────
+  // useMemo keeps the array reference stable for DataTable's sort memo.
+
+  const columns = useMemo<Column<Organization>[]>(
+    () => [
+      ...ORG_STATIC_COLUMNS,
+      {
+        key: "actions",
+        header: "Acciones",
+        align: "right",
+        render: (org) => (
+          <div className="flex flex-wrap justify-end gap-1.5 text-xs">
+            <button
+              type="button"
+              aria-label={`Editar ${org.name}`}
+              className="rounded-md border border-line bg-bg-sunken px-2 py-1 font-medium text-accent transition-colors hover:border-accent/40 hover:bg-accent/10 focus-ring"
+              onClick={() => openEdit(org)}
+            >
+              Editar
+            </button>
+            {org.is_active ? (
+              <button
+                type="button"
+                aria-label={`Desactivar ${org.name}`}
+                className="rounded-md border border-line bg-bg-sunken px-2 py-1 font-medium text-ink-muted transition-colors hover:border-line-strong hover:text-ink focus-ring"
+                onClick={() => void toggleActive(org, false)}
+              >
+                Desactivar
+              </button>
+            ) : (
+              <button
+                type="button"
+                aria-label={`Activar ${org.name}`}
+                className="rounded-md border border-line bg-bg-sunken px-2 py-1 font-medium text-teal transition-colors hover:border-teal/40 hover:bg-teal/10 focus-ring"
+                onClick={() => void toggleActive(org, true)}
+              >
+                Activar
+              </button>
+            )}
+          </div>
+        ),
+      },
+    ],
+    [toggleActive],
+  );
 
   const isCreate = editing?.mode === "create";
 
@@ -146,107 +237,59 @@ export function OrgsPage() {
         accent="Organizaciones"
         subtitle="Alta y edición de instituciones (tenants) de la plataforma."
         actions={
-          <button type="button" className="btn-primary" onClick={openCreate}>
-            Nueva organización
-          </button>
+          <>
+            <div className="card-premium px-4 py-3">
+              <div className="eyebrow mb-1.5">Organizaciones</div>
+              <div className="flex items-center gap-2">
+                <DatabaseIcon className="h-5 w-5 text-accent" />
+                <AnimatedNumber
+                  value={counts.total}
+                  className="font-display text-2xl font-bold tabular-nums text-ink"
+                />
+              </div>
+            </div>
+            <div className="card-premium px-4 py-3">
+              <div className="eyebrow mb-1.5">Activas</div>
+              <div className="flex items-center gap-2">
+                <ShieldIcon className="h-5 w-5 text-teal" />
+                <AnimatedNumber
+                  value={counts.active}
+                  className="font-display text-2xl font-bold tabular-nums text-teal"
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-primary shadow-glow-accent"
+              onClick={openCreate}
+            >
+              + Nueva organización
+            </button>
+          </>
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <MetricCard
-          label="Organizaciones"
-          value={String(counts.total)}
-          tone="accent"
-          icon={<DatabaseIcon width={18} height={18} />}
-          delay={0}
-        />
-        <MetricCard
-          label="Activas"
-          value={String(counts.active)}
-          tone="teal"
-          icon={<ShieldIcon width={18} height={18} />}
-          delay={80}
-        />
-        <MetricCard
-          label="Inactivas"
-          value={String(counts.inactive)}
-          tone="warning"
-          icon={<SettingsIcon width={18} height={18} />}
-          delay={160}
-        />
-      </div>
-
-      <div className="reveal mt-5" style={{ animationDelay: "200ms" }}>
-        <Card
-          title="Tenants"
-          accentDot
-          className="!p-0 overflow-hidden"
-          action={
-            <span className="pill border-line text-ink-faint">
-              {counts.total} {counts.total === 1 ? "registro" : "registros"}
-            </span>
-          }
+      {/* Table */}
+      <div className="reveal" style={{ animationDelay: "200ms" }}>
+        <DataState
+          loading={orgs.loading}
+          error={orgs.error}
+          onRetry={orgs.reload}
+          isEmpty={items.length === 0}
+          emptyMessage="Sin organizaciones todavía."
+          skeleton={<SkeletonRows rows={6} />}
         >
-          <DataState
-            loading={orgs.loading}
-            error={orgs.error}
-            isEmpty={items.length === 0}
-            onRetry={orgs.reload}
-            emptyMessage="Sin organizaciones todavía."
-            skeleton={
-              <div className="space-y-2 p-4">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="h-10 animate-pulse rounded-md bg-panel-hover"
-                  />
-                ))}
-              </div>
-            }
-          >
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-line bg-bg-sunken/60 text-left font-mono text-[11px] uppercase tracking-wider text-ink-faint">
-                    <th className="px-4 py-3 font-medium">Nombre</th>
-                    <th className="px-4 py-3 font-medium">Slug</th>
-                    <th className="px-4 py-3 font-medium">Estado</th>
-                    <th className="px-4 py-3 text-right font-medium">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((org) => (
-                    <tr
-                      key={org.id}
-                      className="border-b border-line/60 transition-colors last:border-0 hover:bg-panel-hover/50"
-                    >
-                      <td className="px-4 py-3 font-medium text-ink">
-                        {org.name}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs text-accent">
-                        {org.slug}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusPill active={org.is_active} />
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          className="btn-ghost px-3 py-1.5 text-xs"
-                          onClick={() => openEdit(org)}
-                        >
-                          Editar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </DataState>
-        </Card>
+          <DataTable
+            columns={columns}
+            rows={items}
+            rowKey={(o) => o.id}
+            pageSize={20}
+            emptyMessage="Sin organizaciones para los filtros actuales."
+          />
+        </DataState>
       </div>
 
+      {/* Create / Edit modal */}
       <Modal
         open={editing !== null}
         title={isCreate ? "Nueva organización" : "Editar organización"}
@@ -255,7 +298,7 @@ export function OrgsPage() {
           <>
             <button
               type="button"
-              className="btn-ghost"
+              className="btn-ghost focus-ring"
               onClick={closeModal}
               disabled={saving}
             >
@@ -263,7 +306,7 @@ export function OrgsPage() {
             </button>
             <button
               type="button"
-              className="btn-primary"
+              className="btn-primary focus-ring"
               onClick={() => void onSubmit()}
               disabled={saving}
             >
@@ -285,7 +328,7 @@ export function OrgsPage() {
             </label>
             <input
               id="org-name"
-              className="field-input"
+              className="field-input focus-ring"
               value={form.name}
               onChange={(e) => onNameChange(e.target.value)}
               placeholder="Instituto Electoral…"
@@ -298,7 +341,7 @@ export function OrgsPage() {
             </label>
             <input
               id="org-slug"
-              className="field-input font-mono"
+              className="field-input font-mono focus-ring"
               value={form.slug}
               onChange={(e) => onSlugChange(e.target.value)}
               placeholder="instituto-electoral"
@@ -308,9 +351,9 @@ export function OrgsPage() {
               organizaciones.
             </p>
           </div>
-          {error && (
+          {modalError && (
             <p className="text-xs text-state-critical" role="alert">
-              {error}
+              {modalError}
             </p>
           )}
           {/* Allow Enter-to-submit without a visible submit button. */}
