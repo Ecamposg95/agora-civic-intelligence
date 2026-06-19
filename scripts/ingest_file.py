@@ -26,6 +26,9 @@ from sqlalchemy import select  # noqa: E402
 from app.database import SessionLocal  # noqa: E402
 from app.ingestion.datasets import DATASETS  # noqa: E402
 from app.ingestion.engine import IngestRunResult, run_ingest  # noqa: E402
+from app.ingestion.resolve import ResolveResult, resolve_area_ids  # noqa: E402
+from app.models.census import CensusMetric  # noqa: E402
+from app.models.electoral_area import AreaLevel  # noqa: E402
 from app.models.ingestion import DataSource, SourceKind  # noqa: E402
 from app.models.organization import Organization  # noqa: E402
 
@@ -105,6 +108,34 @@ def ingest(
         db.close()
 
 
+_CENSUS_LEVEL_MAP = {
+    "estado": AreaLevel.ESTADO,
+    "municipio": AreaLevel.MUNICIPIO,
+}
+
+_RESOLVE_DATASETS = {
+    "census": (CensusMetric, _CENSUS_LEVEL_MAP),
+}
+
+
+def resolve(dataset: str) -> ResolveResult:
+    """Resolve area_id for all NULL-area_id rows of *dataset*. Importable."""
+    if dataset not in _RESOLVE_DATASETS:
+        raise SystemExit(
+            f"Unknown resolve dataset '{dataset}'. Available: {sorted(_RESOLVE_DATASETS)}"
+        )
+    fact_model, level_map = _RESOLVE_DATASETS[dataset]
+    db = SessionLocal()
+    try:
+        result = resolve_area_ids(db, fact_model, level_map)
+        print(
+            f"[ingest_file resolve] dataset={dataset} matched={result.matched} unmatched={result.unmatched}"
+        )
+        return result
+    finally:
+        db.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Ingest a tabular or geo file into Ágora via the SP0b engine"
@@ -153,9 +184,24 @@ def main() -> None:
     geo_p.add_argument("--replace", action="store_true",
                        help="Delete prior rows for this level before inserting")
 
+    # ── resolve subcommand ────────────────────────────────────────────────────
+    resolve_p = subparsers.add_parser(
+        "resolve",
+        help="Resolve area_id for NULL-area_id rows by matching territory_code -> electoral_areas.code",
+    )
+    resolve_p.add_argument(
+        "--dataset",
+        dest="resolve_dataset",
+        required=True,
+        choices=sorted(_RESOLVE_DATASETS),
+        help="Which fact table to resolve (e.g. census)",
+    )
+
     args = parser.parse_args()
 
-    if args.dataset == "census":
+    if args.dataset == "resolve":
+        resolve(args.resolve_dataset)
+    elif args.dataset == "census":
         ingest(
             dataset="census",
             file=args.file,
