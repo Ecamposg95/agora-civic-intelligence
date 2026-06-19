@@ -64,7 +64,37 @@ def _enable_postgis() -> None:
 
 def _create_tables() -> None:
     Base.metadata.create_all(engine)
-    logger.info("Tables ensured")
+    logger.info("Tables ensured (create_all)")
+
+
+def _migrate() -> None:
+    """Run Alembic migrations to head on Postgres; fall back to create_all elsewhere.
+
+    On a fresh Postgres database ``upgrade head`` runs 0001 then 0002 sequentially.
+
+    OPERATIONAL NOTE — existing production databases bootstrapped via create_all
+    (before Alembic was introduced) must be stamped once before the next deploy:
+
+        alembic stamp 0001   # marks the DB as being at the pre-SP0a baseline
+        alembic upgrade head # then applies the SP0a migration (0002)
+
+    DO NOT auto-stamp here: the bootstrap cannot distinguish a truly empty DB
+    from an existing DB that was created without Alembic.
+    """
+    if engine.dialect.name != "postgresql":
+        Base.metadata.create_all(engine)
+        logger.info("Tables ensured (create_all, non-postgres)")
+        return
+    import os
+
+    from alembic import command
+    from alembic.config import Config
+
+    # alembic.ini lives one directory above this file (backend/alembic.ini).
+    ini_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "alembic.ini")
+    cfg = Config(ini_path)
+    command.upgrade(cfg, "head")
+    logger.info("Alembic migrated to head")
 
 
 def _seed() -> None:
@@ -109,7 +139,7 @@ def _seed() -> None:
 def run_bootstrap() -> None:
     """Run the full idempotent bootstrap sequence."""
     _wait_for_db()
-    _enable_postgis()
-    _create_tables()
+    _enable_postgis()   # must run BEFORE _migrate so the geometry type exists
+    _migrate()
     _seed()
     logger.info("Database bootstrap complete")
