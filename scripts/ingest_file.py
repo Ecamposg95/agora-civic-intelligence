@@ -1,14 +1,15 @@
 #!/usr/bin/env python
-"""CLI to ingest a tabular file into Ágora via the SP0b-1 ingestion engine.
+"""CLI to ingest a tabular or geo file into Ágora via the SP0b-1/2a ingestion engine.
 
 Examples:
   # Ingest a census CSV as a global (org-less) source
   python scripts/ingest_file.py census --file data/censo2020.csv \\
       --source "INEGI 2020" --global --anio 2020
 
-  # Ingest scoped to an organisation by slug
-  python scripts/ingest_file.py census --file data/censo2020.csv \\
-      --source "INEGI 2020" --org atlas --anio 2020 --replace
+  # Ingest geometry from a GeoJSON file
+  python scripts/ingest_file.py geometria --file data/distritos.geojson \\
+      --source "INE 2021" --global --level distrito_federal \\
+      --name-prop NOMBRE --code-prop CLAVE --replace
 """
 
 from __future__ import annotations
@@ -60,7 +61,7 @@ def ingest(
     source: str,
     org,
     campaign,
-    anio,
+    extra=None,
     replace: bool = False,
 ) -> IngestRunResult:
     """Core ingestion logic — importable and testable independently of argparse."""
@@ -85,7 +86,6 @@ def ingest(
 
         src = get_or_create_source(db, source, org_id)
         ctx = _CliCtx(org_id)
-        extra = {"anio": anio}
 
         res = run_ingest(
             db,
@@ -93,7 +93,7 @@ def ingest(
             DATASETS[dataset],
             file,
             source=src,
-            extra=extra,
+            extra=extra or {},
             replace=replace,
         )
         print(
@@ -107,64 +107,79 @@ def ingest(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Ingest a tabular file into Ágora via the SP0b-1 engine"
+        description="Ingest a tabular or geo file into Ágora via the SP0b engine"
     )
-    parser.add_argument(
-        "dataset",
-        choices=sorted(DATASETS),
-        help="Dataset key (e.g. census)",
-    )
-    parser.add_argument("--file", required=True, help="Path to the input file")
-    parser.add_argument(
-        "--source", required=True, help="Human-readable data source name"
-    )
+    subparsers = parser.add_subparsers(dest="dataset", required=True)
 
-    scope = parser.add_mutually_exclusive_group()
-    scope.add_argument(
-        "--global",
-        dest="global_scope",
-        action="store_true",
-        default=True,
+    # ── census subcommand ─────────────────────────────────────────────────────
+    census_p = subparsers.add_parser("census", help="Ingest a census tabular CSV")
+    census_p.add_argument("--file", required=True, help="Path to the input file")
+    census_p.add_argument("--source", required=True, help="Human-readable data source name")
+    census_scope = census_p.add_mutually_exclusive_group()
+    census_scope.add_argument(
+        "--global", dest="global_scope", action="store_true", default=True,
         help="Ingest as a global (org-less) source (default)",
     )
-    scope.add_argument(
-        "--org",
-        dest="org",
-        metavar="SLUG",
-        default=None,
+    census_scope.add_argument(
+        "--org", dest="org", metavar="SLUG", default=None,
         help="Scope to organisation by slug",
     )
+    census_p.add_argument("--campaign", dest="campaign", metavar="ID", default=None)
+    census_p.add_argument("--anio", type=int, default=None, help="Year (required for census)")
+    census_p.add_argument("--replace", action="store_true",
+                          help="Delete prior rows matching this scope before inserting")
 
-    parser.add_argument(
-        "--campaign",
-        dest="campaign",
-        metavar="ID",
-        default=None,
-        help="Campaign UUID (optional)",
+    # ── geometria subcommand ──────────────────────────────────────────────────
+    geo_p = subparsers.add_parser("geometria", help="Ingest geometry from GeoJSON or Shapefile")
+    geo_p.add_argument("--file", required=True, help="Path to the GeoJSON / SHP file")
+    geo_p.add_argument("--source", required=True, help="Human-readable data source name")
+    geo_scope = geo_p.add_mutually_exclusive_group()
+    geo_scope.add_argument(
+        "--global", dest="global_scope", action="store_true", default=True,
+        help="Ingest as global reference cartography (default)",
     )
-    parser.add_argument(
-        "--anio",
-        type=int,
-        default=None,
-        help="Year (required for census dataset)",
+    geo_scope.add_argument(
+        "--org", dest="org", metavar="SLUG", default=None,
+        help="Scope to organisation by slug",
     )
-    parser.add_argument(
-        "--replace",
-        action="store_true",
-        help="Delete prior rows matching this scope before inserting",
-    )
+    geo_p.add_argument("--level", required=True,
+                       help="AreaLevel value (e.g. distrito_federal, municipio, seccion)")
+    geo_p.add_argument("--name-prop", dest="name_prop", default="name",
+                       help="Feature property holding the area name (default: name)")
+    geo_p.add_argument("--code-prop", dest="code_prop", default="code",
+                       help="Feature property holding the area code (default: code)")
+    geo_p.add_argument("--parent-prop", dest="parent_prop", default=None,
+                       help="Feature property holding the parent code (optional)")
+    geo_p.add_argument("--replace", action="store_true",
+                       help="Delete prior rows for this level before inserting")
 
     args = parser.parse_args()
 
-    ingest(
-        dataset=args.dataset,
-        file=args.file,
-        source=args.source,
-        org=args.org,
-        campaign=args.campaign,
-        anio=args.anio,
-        replace=args.replace,
-    )
+    if args.dataset == "census":
+        ingest(
+            dataset="census",
+            file=args.file,
+            source=args.source,
+            org=args.org,
+            campaign=args.campaign,
+            extra={"anio": args.anio},
+            replace=args.replace,
+        )
+    elif args.dataset == "geometria":
+        ingest(
+            dataset="geometria",
+            file=args.file,
+            source=args.source,
+            org=args.org,
+            campaign=None,
+            extra={
+                "level": args.level,
+                "name_prop": args.name_prop,
+                "code_prop": args.code_prop,
+                "parent_prop": args.parent_prop,
+            },
+            replace=args.replace,
+        )
 
 
 if __name__ == "__main__":
