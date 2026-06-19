@@ -23,7 +23,7 @@ def test_cli_get_or_create_source_and_ingest(monkeypatch):
     # point the CLI's SessionLocal at the test DB
     monkeypatch.setattr(cli, "SessionLocal", TestingSessionLocal, raising=False)
     res = cli.ingest(dataset="census", file=str(FIX / "census_min.csv"),
-                     source="INEGI 2020", org=None, campaign=None, anio=2020, replace=True)
+                     source="INEGI 2020", org=None, campaign=None, extra={"anio": 2020}, replace=True)
     assert res.inserted == 2
     db = TestingSessionLocal()
     try:
@@ -31,7 +31,7 @@ def test_cli_get_or_create_source_and_ingest(monkeypatch):
         assert db.query(IngestRun).count() >= 1
         # idempotent source: run again, still one source
         cli.ingest(dataset="census", file=str(FIX / "census_min.csv"), source="INEGI 2020",
-                   org=None, campaign=None, anio=2020, replace=True)
+                   org=None, campaign=None, extra={"anio": 2020}, replace=True)
         assert db.query(DataSource).filter(DataSource.name == "INEGI 2020").count() == 1
     finally:
         db.query(CensusMetric).delete(); db.query(IngestRun).delete(); db.query(DataSource).delete(); db.commit(); db.close()
