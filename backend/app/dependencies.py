@@ -113,12 +113,15 @@ def get_campaign_context(
     if campaign is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
     if not ctx.is_superadmin:
+        # Cross-tenant campaigns return 403 (not 404). Acceptable: ids are UUIDs,
+        # so existence-leak via enumeration is impractical.
         if campaign.organization_id != ctx.organization_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Campaign not in your organization")
         member = db.execute(
             select(CampaignMembership).where(
                 CampaignMembership.campaign_id == x_campaign_id,
                 CampaignMembership.user_id == ctx.user.id,
+                CampaignMembership.deleted_at.is_(None),
             )
         ).scalar_one_or_none()
         if member is None:
