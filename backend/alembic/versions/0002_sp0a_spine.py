@@ -70,6 +70,17 @@ def upgrade() -> None:
             return False
         return any(c["name"] == column for c in insp.get_columns(table))
 
+    def _index_exists(table: str, name: str) -> bool:
+        # NOTE: on Postgres a failed statement poisons the whole transaction, so
+        # we must NEVER attempt a create_index that could collide (e.g. when a
+        # legacy create_all schema already has the index).  Pre-check by name —
+        # the same pattern used in 0004/0005 — instead of try/except, which
+        # swallows the Python error but leaves the transaction aborted, breaking
+        # alembic's own final ``UPDATE alembic_version``.
+        if table not in existing_tables:
+            return False
+        return any(ix["name"] == name for ix in insp.get_indexes(table))
+
     # ── Create new enums (Postgres only) ─────────────────────────────────────
     if is_pg:
         sa.Enum(*_CARGO_AMBITO_VALUES, name="cargo_ambito").create(bind, checkfirst=True)
@@ -90,10 +101,8 @@ def upgrade() -> None:
             ),
             sa.Column("territory_level", sa.String(40), nullable=False),
         )
-    try:
+    if not _index_exists("cargos", "ix_cargos_key"):
         op.create_index("ix_cargos_key", "cargos", ["key"], unique=True)
-    except (sa.exc.ProgrammingError, sa.exc.OperationalError):
-        pass
 
     # ── parties ───────────────────────────────────────────────────────────────
     if not _table_exists("parties"):
@@ -105,10 +114,8 @@ def upgrade() -> None:
             sa.Column("short", sa.String(40), nullable=False),
             sa.Column("color", sa.String(9), nullable=False, server_default="#8ba0a8"),
         )
-    try:
+    if not _index_exists("parties", "ix_parties_key"):
         op.create_index("ix_parties_key", "parties", ["key"], unique=True)
-    except (sa.exc.ProgrammingError, sa.exc.OperationalError):
-        pass
 
     # ── coalitions ────────────────────────────────────────────────────────────
     if not _table_exists("coalitions"):
@@ -119,10 +126,8 @@ def upgrade() -> None:
             sa.Column("name", sa.String(160), nullable=False),
             sa.Column("color", sa.String(9), nullable=False, server_default="#8ba0a8"),
         )
-    try:
+    if not _index_exists("coalitions", "ix_coalitions_key"):
         op.create_index("ix_coalitions_key", "coalitions", ["key"], unique=True)
-    except (sa.exc.ProgrammingError, sa.exc.OperationalError):
-        pass
 
     # ── coalition_parties ─────────────────────────────────────────────────────
     if not _table_exists("coalition_parties"):
@@ -142,14 +147,10 @@ def upgrade() -> None:
                 nullable=False,
             ),
         )
-    try:
+    if not _index_exists("coalition_parties", "ix_coalition_parties_coalition_id"):
         op.create_index("ix_coalition_parties_coalition_id", "coalition_parties", ["coalition_id"])
-    except (sa.exc.ProgrammingError, sa.exc.OperationalError):
-        pass
-    try:
+    if not _index_exists("coalition_parties", "ix_coalition_parties_party_id"):
         op.create_index("ix_coalition_parties_party_id", "coalition_parties", ["party_id"])
-    except (sa.exc.ProgrammingError, sa.exc.OperationalError):
-        pass
 
     # ── campaigns ─────────────────────────────────────────────────────────────
     if not _table_exists("campaigns"):
@@ -182,10 +183,8 @@ def upgrade() -> None:
             sa.Column("created_by", sa.String(36), nullable=True),
             sa.Column("updated_by", sa.String(36), nullable=True),
         )
-    try:
+    if not _index_exists("campaigns", "ix_campaigns_organization_id"):
         op.create_index("ix_campaigns_organization_id", "campaigns", ["organization_id"])
-    except (sa.exc.ProgrammingError, sa.exc.OperationalError):
-        pass
 
     # ── contests ──────────────────────────────────────────────────────────────
     if not _table_exists("contests"):
@@ -223,22 +222,14 @@ def upgrade() -> None:
             sa.Column("created_by", sa.String(36), nullable=True),
             sa.Column("updated_by", sa.String(36), nullable=True),
         )
-    try:
+    if not _index_exists("contests", "ix_contests_organization_id"):
         op.create_index("ix_contests_organization_id", "contests", ["organization_id"])
-    except (sa.exc.ProgrammingError, sa.exc.OperationalError):
-        pass
-    try:
+    if not _index_exists("contests", "ix_contests_campaign_id"):
         op.create_index("ix_contests_campaign_id", "contests", ["campaign_id"])
-    except (sa.exc.ProgrammingError, sa.exc.OperationalError):
-        pass
-    try:
+    if not _index_exists("contests", "ix_contests_cargo_id"):
         op.create_index("ix_contests_cargo_id", "contests", ["cargo_id"])
-    except (sa.exc.ProgrammingError, sa.exc.OperationalError):
-        pass
-    try:
+    if not _index_exists("contests", "ix_contests_territory_id"):
         op.create_index("ix_contests_territory_id", "contests", ["territory_id"])
-    except (sa.exc.ProgrammingError, sa.exc.OperationalError):
-        pass
 
     # ── campaign_memberships ──────────────────────────────────────────────────
     if not _table_exists("campaign_memberships"):
@@ -271,16 +262,12 @@ def upgrade() -> None:
             sa.Column("updated_by", sa.String(36), nullable=True),
             sa.UniqueConstraint("user_id", "campaign_id", name="uq_campaign_member"),
         )
-    try:
+    if not _index_exists("campaign_memberships", "ix_campaign_memberships_user_id"):
         op.create_index("ix_campaign_memberships_user_id", "campaign_memberships", ["user_id"])
-    except (sa.exc.ProgrammingError, sa.exc.OperationalError):
-        pass
-    try:
+    if not _index_exists("campaign_memberships", "ix_campaign_memberships_campaign_id"):
         op.create_index(
             "ix_campaign_memberships_campaign_id", "campaign_memberships", ["campaign_id"]
         )
-    except (sa.exc.ProgrammingError, sa.exc.OperationalError):
-        pass
 
     # ── electoral_areas: hierarchy columns ────────────────────────────────────
     # SQLite does not support ADD COLUMN ... REFERENCES ... (FK constraints via
@@ -305,12 +292,10 @@ def upgrade() -> None:
                 "electoral_areas",
                 sa.Column(col_name, sa.String(36), *_fk_args("electoral_areas.id"), nullable=True),
             )
-        try:
+        if not _index_exists("electoral_areas", f"ix_electoral_areas_{col_name}"):
             op.create_index(
                 f"ix_electoral_areas_{col_name}", "electoral_areas", [col_name]
             )
-        except (sa.exc.ProgrammingError, sa.exc.OperationalError):
-            pass
 
     # ── electoral_areas: make organization_id nullable ────────────────────────
     # SQLite does not support ALTER COLUMN to change nullability.  On SQLite,
@@ -337,11 +322,21 @@ def upgrade() -> None:
     # skipped above, so organization_id remains NOT NULL and setting it to NULL
     # would violate the constraint on any non-empty SQLite DB.
     if is_pg:
+        # Compare via ``level::text`` rather than enum literals.  A legacy
+        # production DB bootstrapped by create_all built the area_level enum
+        # from the Python member *names* (uppercase: STATE/MUNICIPALITY), while
+        # an alembic-built DB uses the lowercase *values* (0001's
+        # _OLD_AREA_LEVEL_VALUES).  A bare ``level IN ('state','municipality')``
+        # raises "invalid input value for enum area_level" when those exact
+        # lowercase labels are absent — which would crash this migration on the
+        # create_all schema.  The text cast never raises for an absent label and
+        # the case-folded IN list promotes legacy cartography regardless of how
+        # the enum was originally created.
         op.execute(
             sa.text(
                 "UPDATE electoral_areas "
                 "SET organization_id = NULL "
-                "WHERE level IN ('state', 'municipality')"
+                "WHERE lower(level::text) IN ('state', 'municipality')"
             )
         )
 
