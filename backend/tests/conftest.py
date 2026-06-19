@@ -15,6 +15,7 @@ from app.core.security import hash_password
 from app.database import Base, get_db
 from app.main import app
 from app.models.audit_log import AuditLog
+from app.models.campaign import Campaign, CampaignMembership, Contest
 from app.models.catalog import Cargo, Coalition, CoalitionParty, Party
 from app.models.electoral_area import ElectoralArea
 from app.models.organization import Organization
@@ -42,6 +43,9 @@ Base.metadata.create_all(
         Party.__table__,
         Coalition.__table__,
         CoalitionParty.__table__,
+        Campaign.__table__,
+        Contest.__table__,
+        CampaignMembership.__table__,
     ],
 )
 
