@@ -21,3 +21,31 @@ def test_campaign_contest_membership_shape():
     col = CampaignMixin.__dict__["campaign_id"]
     assert col is not None
     assert CampaignStatus.DRAFT.value == "draft"
+
+
+from tests.conftest import auth_headers, ALPHA_CAMPAIGN_ID
+
+
+def test_member_can_read_own_campaign(client):
+    h = auth_headers(client, "admin@alpha.gov")
+    r = client.get("/api/campaigns/mine", headers=h)
+    assert r.status_code == 200
+    assert any(c["id"] == ALPHA_CAMPAIGN_ID for c in r.json())
+
+
+def test_cross_tenant_cannot_use_campaign(client):
+    h = auth_headers(client, "admin@beta.gov")
+    r = client.get(f"/api/campaigns/{ALPHA_CAMPAIGN_ID}", headers={**h, "X-Campaign-Id": ALPHA_CAMPAIGN_ID})
+    assert r.status_code in (403, 404)
+
+
+def test_missing_campaign_header_rejected(client):
+    h = auth_headers(client, "admin@alpha.gov")
+    r = client.get(f"/api/campaigns/{ALPHA_CAMPAIGN_ID}/contests", headers=h)
+    assert r.status_code == 400
+
+
+def test_member_can_list_and_create_contest(client):
+    h = {**auth_headers(client, "admin@alpha.gov"), "X-Campaign-Id": ALPHA_CAMPAIGN_ID}
+    r = client.get(f"/api/campaigns/{ALPHA_CAMPAIGN_ID}/contests", headers=h)
+    assert r.status_code == 200 and isinstance(r.json(), list)
