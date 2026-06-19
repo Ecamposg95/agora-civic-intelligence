@@ -12,7 +12,7 @@ Steps (all idempotent, safe to run on every boot):
   1. Wait for the database to accept connections (handles cold-start races).
   2. Enable the PostGIS extension (PostgreSQL only) — required before the
      ``electoral_areas`` table with its ``Geometry`` column can be created.
-  3. Create tables.
+  3. Run Alembic migrations to head (Postgres) or create_all (SQLite/other).
   4. Seed a base organization and a super-admin user if absent.
 
 Seed credentials come from env (never hardcoded):
@@ -22,7 +22,7 @@ Seed credentials come from env (never hardcoded):
 import os
 import time
 
-from sqlalchemy import select, text
+from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import OperationalError
 
 import app.models  # noqa: F401  (register models on Base.metadata)
@@ -62,30 +62,21 @@ def _enable_postgis() -> None:
     logger.info("PostGIS extension ensured")
 
 
-def _create_tables() -> None:
-    Base.metadata.create_all(engine)
-    logger.info("Tables ensured (create_all)")
-
-
 def _migrate() -> None:
     """Run Alembic migrations to head on Postgres; fall back to create_all elsewhere.
 
-    On a fresh Postgres database ``upgrade head`` runs 0001 then 0002 sequentially.
+    On a fresh Postgres database ``upgrade head`` runs 0001 → 0002 → 0003 in sequence.
 
-    OPERATIONAL NOTE — existing production databases bootstrapped via create_all
-    (before Alembic was introduced) must be stamped once before the next deploy:
-
-        alembic stamp 0001   # marks the DB as being at the pre-SP0a baseline
-        alembic upgrade head # then applies the SP0a migration (0002)
-
-    DO NOT auto-stamp here: the bootstrap cannot distinguish a truly empty DB
-    from an existing DB that was created without Alembic.
+    Legacy production databases (bootstrapped via create_all before Alembic was
+    introduced) have all base tables but no ``alembic_version`` row.  We detect
+    this by checking whether ``organizations`` exists without ``alembic_version``
+    and automatically stamp the DB at revision 0001 (the baseline that matches
+    what create_all produced) before running ``upgrade head``.
     """
     if engine.dialect.name != "postgresql":
         Base.metadata.create_all(engine)
         logger.info("Tables ensured (create_all, non-postgres)")
         return
-    import os
 
     from alembic import command
     from alembic.config import Config
@@ -93,6 +84,25 @@ def _migrate() -> None:
     # alembic.ini lives one directory above this file (backend/alembic.ini).
     ini_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "alembic.ini")
     cfg = Config(ini_path)
+
+    insp = inspect(engine)
+    existing_tables = set(insp.get_table_names())
+    has_organizations = "organizations" in existing_tables
+    has_alembic_version = "alembic_version" in existing_tables
+
+    if has_organizations and not has_alembic_version:
+        # Pre-Alembic production DB: schema matches baseline 0001.
+        # Stamp it so upgrade head applies only the delta revisions.
+        logger.info(
+            "Detected pre-Alembic production DB (organizations table exists, "
+            "no alembic_version). Stamping at revision 0001."
+        )
+        command.stamp(cfg, "0001")
+    elif not has_organizations:
+        logger.info("Fresh database — running full upgrade head.")
+    else:
+        logger.info("Alembic-managed database — running upgrade head.")
+
     command.upgrade(cfg, "head")
     logger.info("Alembic migrated to head")
 

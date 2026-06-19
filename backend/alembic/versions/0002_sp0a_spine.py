@@ -265,28 +265,26 @@ def upgrade() -> None:
             nullable=True,
         )
 
-    # ── area_level enum: extend with SP0a values ──────────────────────────────
-    # ALTER TYPE ... ADD VALUE cannot run inside a transaction on older PG.
-    # We use autocommit_block() to issue each ADD VALUE outside the transaction.
-    # On SQLite the enum is stored as VARCHAR -- no DDL needed.
-    if is_pg:
-        with op.get_context().autocommit_block():
-            for value in _NEW_AREA_LEVEL_VALUES:
-                op.execute(
-                    sa.text(f"ALTER TYPE area_level ADD VALUE IF NOT EXISTS '{value}'")
-                )
+    # ── area_level enum extension ─────────────────────────────────────────────
+    # ALTER TYPE ... ADD VALUE cannot run inside a transaction on Postgres.
+    # This is handled in the NEXT revision (0003_area_level_values.py) which
+    # uses an autocommit block.  Nothing to do here.
 
     # ── data migration: promote cartography to global (no org binding) ────────
     # Rows with the OLD English level names that represent shared geographic
     # reference data are unbound from any tenant.  (New Spanish-named rows are
     # inserted already null via the API; this covers legacy seeds.)
-    op.execute(
-        sa.text(
-            "UPDATE electoral_areas "
-            "SET organization_id = NULL "
-            "WHERE level IN ('state', 'municipality')"
+    # Guard: only run on Postgres — on SQLite the ALTER COLUMN to nullable is
+    # skipped above, so organization_id remains NOT NULL and setting it to NULL
+    # would violate the constraint on any non-empty SQLite DB.
+    if is_pg:
+        op.execute(
+            sa.text(
+                "UPDATE electoral_areas "
+                "SET organization_id = NULL "
+                "WHERE level IN ('state', 'municipality')"
+            )
         )
-    )
 
 
 def downgrade() -> None:
@@ -316,15 +314,12 @@ def downgrade() -> None:
     op.drop_index("ix_electoral_areas_parent_id", table_name="electoral_areas")
     op.drop_column("electoral_areas", "parent_id")
 
-    # ── revert organization_id to NOT NULL ────────────────────────────────────
-    # NOTE: this will fail if any rows have organization_id = NULL.
-    if is_pg:
-        op.alter_column(
-            "electoral_areas",
-            "organization_id",
-            existing_type=sa.String(36),
-            nullable=False,
-        )
+    # ── organization_id nullability ───────────────────────────────────────────
+    # We do NOT revert organization_id back to NOT NULL here.  After the upgrade
+    # data migration, rows may have organization_id = NULL; attempting ALTER to
+    # NOT NULL would fail with a constraint violation.  Leaving it nullable on
+    # downgrade is harmless: 0001 defined it NOT NULL only for the initial DDL,
+    # and a full downgrade to base (dropping all tables) erases the column anyway.
 
     # ── drop new PG enums ─────────────────────────────────────────────────────
     if is_pg:
