@@ -5,6 +5,58 @@ from app.ingestion.validation import validate_rows, ColumnSpec
 FIX = Path(__file__).parent / "fixtures"
 
 
+# ---------------------------------------------------------------------------
+# Engine / DatasetSpec tests (SP0b-1 Task 3)
+# ---------------------------------------------------------------------------
+from app.ingestion.engine import run_ingest  # noqa: E402
+from app.ingestion.datasets import DATASETS  # noqa: E402
+from app.models.census import CensusMetric  # noqa: E402
+from app.models.ingestion import IngestRun, IngestStatus  # noqa: E402
+from tests.conftest import TestingSessionLocal  # noqa: E402
+
+
+class _Ctx:
+    organization_id = None  # global reference
+    campaign_id = None
+    is_superadmin = True
+
+    class user:  # noqa
+        id = "tester"
+
+
+def test_engine_ingests_census_and_records_run():
+    db = TestingSessionLocal()
+    try:
+        spec = DATASETS["census"]
+        result = run_ingest(db, _Ctx(), spec, FIX / "census_min.csv", source=None, extra={"anio": 2020}, replace=False)
+        run = db.get(IngestRun, result.run_id)
+        assert run.status in (IngestStatus.SUCCESS, IngestStatus.PARTIAL)
+        assert run.rows_inserted == 2
+        rows = db.query(CensusMetric).filter(CensusMetric.ingest_run_id == run.id).all()
+        assert len(rows) == 2
+        assert {r.territory_code for r in rows} == {"15", "15001"}
+    finally:
+        db.query(CensusMetric).delete()
+        db.query(IngestRun).delete()
+        db.commit()
+        db.close()
+
+
+def test_engine_replace_is_idempotent():
+    db = TestingSessionLocal()
+    try:
+        spec = DATASETS["census"]
+        run_ingest(db, _Ctx(), spec, FIX / "census_min.csv", source=None, extra={"anio": 2020}, replace=True)
+        run_ingest(db, _Ctx(), spec, FIX / "census_min.csv", source=None, extra={"anio": 2020}, replace=True)
+        # replace by (org, anio) scope → still only 2 rows, not 4
+        assert db.query(CensusMetric).filter(CensusMetric.anio == 2020).count() == 2
+    finally:
+        db.query(CensusMetric).delete()
+        db.query(IngestRun).delete()
+        db.commit()
+        db.close()
+
+
 def test_read_csv_utf8():
     rows, header = read_tabular(FIX / "census_min.csv")
     rows = list(rows)
