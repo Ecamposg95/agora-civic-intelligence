@@ -28,7 +28,10 @@ from app.ingestion.datasets import DATASETS  # noqa: E402
 from app.ingestion.engine import IngestRunResult, run_ingest  # noqa: E402
 from app.ingestion.resolve import ResolveResult, resolve_area_ids  # noqa: E402
 from app.models.census import CensusMetric  # noqa: E402
+from app.models.economic_unit import EconomicUnit  # noqa: E402
+from app.models.election_result import ElectionResult  # noqa: E402
 from app.models.electoral_area import AreaLevel  # noqa: E402
+from app.models.socio import SocioMetric  # noqa: E402
 from app.models.ingestion import DataSource, SourceKind  # noqa: E402
 from app.models.organization import Organization  # noqa: E402
 
@@ -113,8 +116,17 @@ _CENSUS_LEVEL_MAP = {
     "municipio": AreaLevel.MUNICIPIO,
 }
 
+_FACT_LEVEL_MAP = {
+    "estado": AreaLevel.ESTADO,
+    "municipio": AreaLevel.MUNICIPIO,
+    "seccion": AreaLevel.SECCION,
+}
+
 _RESOLVE_DATASETS = {
     "census": (CensusMetric, _CENSUS_LEVEL_MAP),
+    "resultados": (ElectionResult, _FACT_LEVEL_MAP),
+    "socio": (SocioMetric, _FACT_LEVEL_MAP),
+    "denue": (EconomicUnit, _FACT_LEVEL_MAP),
 }
 
 
