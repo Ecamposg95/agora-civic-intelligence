@@ -196,6 +196,39 @@ def main() -> None:
     geo_p.add_argument("--replace", action="store_true",
                        help="Delete prior rows for this level before inserting")
 
+    # ── resultados ────────────────────────────────────────────────────────────
+    res_p = subparsers.add_parser("resultados", help="Ingest election results CSV")
+    res_p.add_argument("--file", required=True)
+    res_p.add_argument("--source", required=True)
+    res_p.add_argument("--org", dest="org", default=None)
+    res_p.add_argument("--anio", type=int, required=True)
+    res_p.add_argument("--eleccion", required=True,
+                       help="Election identity, e.g. presidencia / diputaciones_federales")
+    res_p.add_argument("--nivel", default=None, help="Optional nivel for --replace scope")
+    res_p.add_argument("--replace", action="store_true")
+
+    # ── socio ─────────────────────────────────────────────────────────────────
+    soc_p = subparsers.add_parser("socio", help="Ingest socioeconomic metrics CSV")
+    soc_p.add_argument("--file", required=True)
+    soc_p.add_argument("--source", required=True)
+    soc_p.add_argument("--org", dest="org", default=None)
+    soc_p.add_argument("--anio", type=int, required=True)
+    soc_p.add_argument("--nivel", default=None)
+    soc_p.add_argument("--replace", action="store_true")
+
+    # ── denue ─────────────────────────────────────────────────────────────────
+    den_p = subparsers.add_parser("denue", help="Ingest DENUE economic units CSV (lat/lon)")
+    den_p.add_argument("--file", required=True)
+    den_p.add_argument("--source", required=True)
+    den_p.add_argument("--org", dest="org", default=None)
+    den_p.add_argument("--replace", action="store_true")
+
+    # ── casillas ──────────────────────────────────────────────────────────────
+    cas_p = subparsers.add_parser("casillas", help="Ingest casilla points as electoral_areas")
+    cas_p.add_argument("--file", required=True)
+    cas_p.add_argument("--source", required=True)
+    cas_p.add_argument("--replace", action="store_true")
+
     # ── resolve subcommand ────────────────────────────────────────────────────
     resolve_p = subparsers.add_parser(
         "resolve",
@@ -238,6 +271,20 @@ def main() -> None:
             },
             replace=args.replace,
         )
+    elif args.dataset == "resultados":
+        ingest(dataset="resultados", file=args.file, source=args.source, org=args.org,
+               campaign=None, extra={"anio": args.anio, "eleccion": args.eleccion,
+                                     "nivel": args.nivel}, replace=args.replace)
+    elif args.dataset == "socio":
+        ingest(dataset="socio", file=args.file, source=args.source, org=args.org,
+               campaign=None, extra={"anio": args.anio, "nivel": args.nivel},
+               replace=args.replace)
+    elif args.dataset == "denue":
+        ingest(dataset="denue", file=args.file, source=args.source, org=args.org,
+               campaign=None, extra={}, replace=args.replace)
+    elif args.dataset == "casillas":
+        ingest(dataset="casillas", file=args.file, source=args.source, org=None,
+               campaign=None, extra={}, replace=args.replace)
 
 
 if __name__ == "__main__":
