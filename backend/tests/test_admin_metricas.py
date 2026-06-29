@@ -18,6 +18,8 @@ def test_metricas_totals_and_daily():
         assert any(b["count"] == 2 for b in m["by_activista"])
         # by_seccion: a bucket for "0001" with count 2
         assert any(b["label"] == "0001" and b["count"] == 2 for b in m["by_seccion"])
+        # by_lider: a bucket for Alpha Líder with count 2 (activista1 belongs to them)
+        assert any(b["label"] == "Alpha Líder" and b["count"] == 2 for b in m["by_lider"])
         # avance_diario / by_day: sum matches total
         assert sum(p["count"] for p in m["by_day"]) == 2
     finally:

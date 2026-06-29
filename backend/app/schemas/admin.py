@@ -57,6 +57,7 @@ class MetricsRead(BaseModel):
     total: int
     by_seccion: list[MetricBucket]
     by_activista: list[MetricBucket]
+    by_lider: list[MetricBucket]
     by_day: list[DailyPoint]
 
 
@@ -73,6 +74,7 @@ class EstructuraNode(BaseModel):
     full_name: str
     email: str
     seccion: Optional[str]
+    total: int  # rollup: sum of activistas' counts + líder's own captured registros
     activistas: list[EstructuraActivista]
 
 

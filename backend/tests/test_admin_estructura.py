@@ -18,6 +18,10 @@ def test_estructura_tree_counts():
         assert {"Alpha Activista 1", "Alpha Activista 2"} <= activista_names
         a1_node = next(a for a in lider_node["activistas"] if a["full_name"] == "Alpha Activista 1")
         assert a1_node["count"] == 1
+        # Node rollup: total equals sum of activistas' counts
+        expected_total = sum(a["count"] for a in lider_node["activistas"])
+        assert lider_node["total"] == expected_total
+        assert lider_node["total"] >= 1  # non-vacuous: at least 1 registro in tree
     finally:
         db.query(Registro).delete(); db.commit(); db.close()
 

@@ -179,10 +179,13 @@ def metrics(db: Session, ctx: CampaignContext) -> dict:
         ).all()
     ]
 
+    by_lider = _por_lider(db, reg, act)
+
     return {
         "total": int(total),
-        "by_activista": by_activista,
         "by_seccion": by_seccion,
+        "by_activista": by_activista,
+        "by_lider": by_lider,
         "by_day": by_day,
     }
 
@@ -238,11 +241,14 @@ def estructura(db: Session, ctx: CampaignContext) -> list[dict]:
             }
             for a in acts
         ]
+        # Rollup = activistas' captures + any registros the líder captured directly
+        node_total = sum(a["count"] for a in act_nodes) + int(counts.get(lider.id, 0))
         tree.append({
             "id": lider.id,
             "full_name": lider.full_name,
             "email": lider.email,
             "seccion": lider.seccion,
+            "total": node_total,
             "activistas": act_nodes,
         })
     return tree
