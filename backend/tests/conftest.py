@@ -9,6 +9,9 @@ import os
 
 from cryptography.fernet import Fernet
 
+# Must be set before any app import so ElectoralArea uses Text (not PostGIS Geometry)
+# and geoalchemy2's RecoverGeometryColumn hook never fires on SQLite.
+os.environ.setdefault("DATABASE_URL", "sqlite://")
 os.environ.setdefault("FERNET_KEY", Fernet.generate_key().decode())
 
 import pytest
