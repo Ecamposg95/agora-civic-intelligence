@@ -36,3 +36,13 @@ Thumbs.db
 
 # --- Logs ---
 *.log
+
+# --- Superpowers scratch (SDD ledgers, briefs, review packages) ---
+.superpowers/
+
+# --- Personal data (PII) — never commit ---
+# Raw activist/elector spreadsheets contain names + claves de elector.
+docs/data/
+*.xlsx
+*.xls
+*.csv
