@@ -22,6 +22,7 @@ class UserCreate(UserBase):
     organization_id: str | None = None
     # Activist-structure fields (SPA-2 T6).
     lider_id: str | None = None
+    coordinador_id: str | None = None
     seccion: str | None = Field(default=None, max_length=20)
 
 
@@ -31,8 +32,9 @@ class UserUpdate(BaseModel):
     phone: str | None = Field(default=None, max_length=40)
     is_active: bool | None = None
     # Activist-structure fields (SPA-2 T6). None means "not sent"; use
-    # model_fields_set to distinguish "omit" from "clear" for lider_id.
+    # model_fields_set to distinguish "omit" from "clear" for lider_id/coordinador_id.
     lider_id: str | None = None
+    coordinador_id: str | None = None
     seccion: str | None = Field(default=None, max_length=20)
 
 
@@ -51,6 +53,7 @@ class UserRead(UserBase):
     is_active: bool
     must_change_password: bool
     lider_id: str | None
+    coordinador_id: str | None
     seccion: str | None
     created_at: datetime
     updated_at: datetime

@@ -29,6 +29,12 @@ router = APIRouter(prefix="/users", tags=["users"])
 # Admin or superadmin (superadmin passes require_roles automatically).
 ManagerCtx = Annotated[TenantContext, Depends(require_roles(UserRole.ADMIN))]
 
+# Create/update also allowed for COORDINADOR and LIDER (scope-validated in service).
+CreatorCtx = Annotated[
+    TenantContext,
+    Depends(require_roles(UserRole.ADMIN, UserRole.COORDINADOR, UserRole.LIDER)),
+]
+
 
 @router.post(
     "/me/change-password",
@@ -91,7 +97,7 @@ def list_users(
 @router.post(
     "", response_model=UserCreated, status_code=status.HTTP_201_CREATED, summary="Create user"
 )
-def create_user(payload: UserCreate, db: DbSession, ctx: ManagerCtx) -> UserCreated:
+def create_user(payload: UserCreate, db: DbSession, ctx: CreatorCtx) -> UserCreated:
     user, temp_password = users_service.create_user(db, ctx, payload)
     return UserCreated(
         user=UserRead.model_validate(user), temporary_password=temp_password
@@ -105,7 +111,7 @@ def get_user(user_id: str, db: DbSession, ctx: ManagerCtx) -> UserRead:
 
 @router.patch("/{user_id}", response_model=UserRead, summary="Update user")
 def update_user(
-    user_id: str, payload: UserUpdate, db: DbSession, ctx: ManagerCtx
+    user_id: str, payload: UserUpdate, db: DbSession, ctx: CreatorCtx
 ) -> UserRead:
     return UserRead.model_validate(users_service.update_user(db, ctx, user_id, payload))
 

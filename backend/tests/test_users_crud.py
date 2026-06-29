@@ -231,6 +231,110 @@ def test_update_user_omit_seccion_leaves_it_unchanged(client: TestClient) -> Non
     assert resp.json()["seccion"] == existing_seccion
 
 
+def test_coordinador_creates_lider_in_substructure(client: TestClient) -> None:
+    """COORDINADOR can create a LIDER wired to their own sub-structure (201)."""
+    from sqlalchemy import select
+
+    from tests.conftest import TestingSessionLocal
+
+    db = TestingSessionLocal()
+    coord_id = db.execute(
+        select(User.id).where(User.email == "coord@alpha.gov")
+    ).scalar_one()
+    db.close()
+
+    h = auth_headers(client, "coord@alpha.gov")
+    r = client.post(
+        "/api/users",
+        json={
+            "email": "newlider@alpha.gov",
+            "full_name": "NL",
+            "password": "password123",
+            "role": "lider",
+            "coordinador_id": coord_id,
+        },
+        headers=h,
+    )
+    assert r.status_code in (200, 201), r.text
+
+
+def test_coordinador_cannot_create_admin(client: TestClient) -> None:
+    """COORDINADOR cannot create an ADMIN (only SA can) — 403."""
+    h = auth_headers(client, "coord@alpha.gov")
+    r = client.post(
+        "/api/users",
+        json={"email": "bad@alpha.gov", "full_name": "Bad", "password": "password123", "role": "admin"},
+        headers=h,
+    )
+    assert r.status_code == 403, r.text
+
+
+def test_coordinador_cannot_create_lider_outside_substructure(client: TestClient) -> None:
+    """COORDINADOR cannot create a LIDER whose coordinador_id != actor.id — 403."""
+    h = auth_headers(client, "coord@alpha.gov")
+    r = client.post(
+        "/api/users",
+        json={
+            "email": "wronglider@alpha.gov",
+            "full_name": "WL",
+            "password": "password123",
+            "role": "lider",
+            "coordinador_id": "00000000-dead-beef-dead-000000000000",
+        },
+        headers=h,
+    )
+    assert r.status_code == 403, r.text
+
+
+def test_lider_creates_activista_under_itself(client: TestClient) -> None:
+    """LIDER can create an ACTIVISTA with lider_id == actor.id (201)."""
+    from sqlalchemy import select
+
+    from tests.conftest import TestingSessionLocal
+
+    db = TestingSessionLocal()
+    lider_id = db.execute(
+        select(User.id).where(User.email == "lider@alpha.gov")
+    ).scalar_one()
+    db.close()
+
+    h = auth_headers(client, "lider@alpha.gov")
+    r = client.post(
+        "/api/users",
+        json={
+            "email": "newactivista@alpha.gov",
+            "full_name": "NA",
+            "password": "password123",
+            "role": "activista",
+            "lider_id": lider_id,
+        },
+        headers=h,
+    )
+    assert r.status_code in (200, 201), r.text
+
+
+def test_lider_cannot_create_lider(client: TestClient) -> None:
+    """LIDER cannot create another LIDER — 403."""
+    h = auth_headers(client, "lider@alpha.gov")
+    r = client.post(
+        "/api/users",
+        json={"email": "x@alpha.gov", "full_name": "X", "password": "password123", "role": "lider"},
+        headers=h,
+    )
+    assert r.status_code == 403, r.text
+
+
+def test_admin_cannot_create_admin(client: TestClient) -> None:
+    """ADMIN cannot create another ADMIN — only SA may grant that role (403)."""
+    h = auth_headers(client, "admin@alpha.gov")
+    r = client.post(
+        "/api/users",
+        json={"email": "newadmin@alpha.gov", "full_name": "NA", "role": "admin"},
+        headers=h,
+    )
+    assert r.status_code == 403, r.text
+
+
 def test_lider_id_must_be_a_lider(client: TestClient) -> None:
     from sqlalchemy import select
 

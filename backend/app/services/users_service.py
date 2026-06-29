@@ -87,6 +87,104 @@ def _validate_lider(
         )
 
 
+def _validate_coordinador(
+    db: Session,
+    actor: User,
+    role: UserRole,
+    lider_id: str | None,
+    coordinador_id: str | None,
+) -> None:
+    """Validate that a COORDINADOR only creates within their own sub-structure.
+
+    - Creating a LIDER: ``coordinador_id`` must equal ``actor.id``.
+    - Creating an ACTIVISTA: the referenced LIDER must have
+      ``coordinador_id == actor.id``.
+    - Any other target role: 403.
+    """
+    if role not in (UserRole.LIDER, UserRole.ACTIVISTA):
+        raise _forbidden("COORDINADOR can only create LIDER or ACTIVISTA users")
+    if role == UserRole.LIDER:
+        if coordinador_id != actor.id:
+            raise _forbidden(
+                "COORDINADOR can only create a LIDER within their own sub-structure"
+                " (coordinador_id must equal your user id)"
+            )
+    else:  # ACTIVISTA
+        if lider_id is None:
+            raise _forbidden(
+                "COORDINADOR must supply lider_id when creating an ACTIVISTA"
+            )
+        lider = db.execute(
+            select(User).where(User.id == lider_id, User.deleted_at.is_(None))
+        ).scalar_one_or_none()
+        if lider is None or lider.coordinador_id != actor.id:
+            raise _forbidden(
+                "COORDINADOR can only create an ACTIVISTA under a LIDER in their sub-structure"
+            )
+
+
+def _enforce_actor_scope(
+    db: Session,
+    ctx: TenantContext,
+    role: UserRole,
+    lider_id: str | None,
+    coordinador_id: str | None,
+) -> None:
+    """Apply per-actor-role creation scope rules (privilege escalation prevention).
+
+    SUPERADMIN — unrestricted.
+    ADMIN      — any non-admin/non-superadmin role in their org (blocked above
+                 by _assert_can_assign_role).
+    COORDINADOR— only LIDER or ACTIVISTA in their sub-structure.
+    LIDER      — only ACTIVISTA with lider_id == actor.id.
+    Others     — blocked at the router via require_roles, should never reach here.
+    """
+    if ctx.is_superadmin or ctx.role == UserRole.ADMIN:
+        return  # role-level already validated by _assert_can_assign_role
+    if ctx.role == UserRole.COORDINADOR:
+        _validate_coordinador(db, ctx.user, role, lider_id, coordinador_id)
+        return
+    if ctx.role == UserRole.LIDER:
+        if role != UserRole.ACTIVISTA:
+            raise _forbidden("LIDER can only create ACTIVISTA users")
+        if lider_id != ctx.user.id:
+            raise _forbidden(
+                "LIDER can only create ACTIVISTA users under themselves"
+                " (lider_id must equal your user id)"
+            )
+        return
+    raise _forbidden("Insufficient permissions to create users")
+
+
+def _update_actor_scope_check(
+    db: Session,
+    ctx: TenantContext,
+    *,
+    target_role: UserRole,
+    lider_id: str | None,
+    coordinador_id: str | None,
+) -> None:
+    """Like _enforce_actor_scope but for updates.
+
+    ADMIN and SA have no sub-structure restrictions (role-level already
+    validated).  COORDINADOR and LIDER still must stay within their scope.
+    """
+    if ctx.is_superadmin or ctx.role == UserRole.ADMIN:
+        return
+    if ctx.role == UserRole.COORDINADOR:
+        _validate_coordinador(db, ctx.user, target_role, lider_id, coordinador_id)
+        return
+    if ctx.role == UserRole.LIDER:
+        if target_role != UserRole.ACTIVISTA:
+            raise _forbidden("LIDER can only manage ACTIVISTA users")
+        if lider_id != ctx.user.id:
+            raise _forbidden(
+                "LIDER can only manage ACTIVISTA users under themselves"
+                " (lider_id must equal your user id)"
+            )
+        return
+
+
 def _assert_can_manage(ctx: TenantContext, target: User) -> None:
     """Tenant + privilege guard for acting on a target user."""
     if ctx.is_superadmin:
@@ -101,6 +199,8 @@ def _assert_can_manage(ctx: TenantContext, target: User) -> None:
 def _assert_can_assign_role(ctx: TenantContext, role: UserRole) -> None:
     if role == UserRole.SUPERADMIN and not ctx.is_superadmin:
         raise _forbidden("Only a superadmin can grant the superadmin role")
+    if role == UserRole.ADMIN and not ctx.is_superadmin:
+        raise _forbidden("Only a superadmin can grant the admin role")
 
 
 def _get_owned(db: Session, ctx: TenantContext, user_id: str, *, include_deleted: bool) -> User:
@@ -181,6 +281,9 @@ def create_user(db: Session, ctx: TenantContext, data: UserCreate) -> tuple[User
             status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
         )
 
+    # Sub-structure scope check (COORDINADOR/LIDER privilege escalation prevention).
+    _enforce_actor_scope(db, ctx, data.role, data.lider_id, data.coordinador_id)
+
     _validate_lider(db, ctx, data.lider_id, org_id)
 
     temp_password = data.password or generate_temp_password()
@@ -194,6 +297,7 @@ def create_user(db: Session, ctx: TenantContext, data: UserCreate) -> tuple[User
         must_change_password=True,
         is_active=True,
         lider_id=data.lider_id,
+        coordinador_id=data.coordinador_id,
         seccion=data.seccion,
         created_by=ctx.user.id,
         updated_by=ctx.user.id,
@@ -217,6 +321,7 @@ def create_user(db: Session, ctx: TenantContext, data: UserCreate) -> tuple[User
 def update_user(db: Session, ctx: TenantContext, user_id: str, data: UserUpdate) -> User:
     user = _get_owned(db, ctx, user_id, include_deleted=False)
 
+    target_role = data.role if data.role is not None else user.role
     if data.role is not None and data.role != user.role:
         _assert_can_assign_role(ctx, data.role)
         if user.id == ctx.user.id:
@@ -233,6 +338,18 @@ def update_user(db: Session, ctx: TenantContext, user_id: str, data: UserUpdate)
     if "lider_id" in data.model_fields_set:
         _validate_lider(db, ctx, data.lider_id, user.organization_id, target_id=user.id)
         user.lider_id = data.lider_id
+    if "coordinador_id" in data.model_fields_set:
+        user.coordinador_id = data.coordinador_id
+    # Enforce sub-structure scope when COORDINADOR/LIDER updates structure fields.
+    _update_actor_scope_check(
+        db,
+        ctx,
+        target_role=target_role,
+        lider_id=data.lider_id if "lider_id" in data.model_fields_set else user.lider_id,
+        coordinador_id=(
+            data.coordinador_id if "coordinador_id" in data.model_fields_set else user.coordinador_id
+        ),
+    )
     if "seccion" in data.model_fields_set:
         # Use model_fields_set so an explicit null clears the field (mirrors
         # lider_id handling above).  Omitting seccion from the payload leaves
