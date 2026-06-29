@@ -29,6 +29,7 @@ import app.models  # noqa: F401  (register models on Base.metadata)
 from app.core.logging import get_logger
 from app.core.security import hash_password
 from app.database import Base, SessionLocal, engine
+from app.models.campaign import Campaign, CampaignMembership
 from app.models.organization import Organization
 from app.models.privacy import PrivacyNotice
 from app.models.user import User, UserRole
@@ -151,7 +152,127 @@ def _seed() -> None:
                 logger.info("Seeded super-admin '%s'", admin_email)
         db.commit()
 
+    _seed_demo_activists()
     _seed_global_privacy_notice()
+
+
+def _seed_demo_activists() -> None:
+    """Idempotently seed lucy (LIDER) + one activista + demo campaign + memberships.
+
+    Env-gated: skipped entirely when SEED_LUCY_PASSWORD or SEED_ACTIVISTA_PASSWORD
+    is absent so no secrets are accidentally committed.  All steps are idempotent;
+    re-running produces no duplicates and no errors.
+
+    Required env vars:
+      SEED_LUCY_EMAIL          (default: lucy@demo.agora.mx)
+      SEED_LUCY_PASSWORD       (required; no default — absent → skip)
+      SEED_ACTIVISTA_EMAIL     (default: activista@demo.agora.mx)
+      SEED_ACTIVISTA_PASSWORD  (required; no default — absent → skip)
+      SEED_ORG_SLUG            (default: atlas — must match the org seeded by _seed)
+      SEED_DEMO_CAMPAIGN_NAME  (default: Campaña Demo 2027)
+    """
+    lucy_email = os.getenv("SEED_LUCY_EMAIL", "lucy@demo.agora.mx")
+    lucy_password = os.getenv("SEED_LUCY_PASSWORD")
+    activista_email = os.getenv("SEED_ACTIVISTA_EMAIL", "activista@demo.agora.mx")
+    activista_password = os.getenv("SEED_ACTIVISTA_PASSWORD")
+    org_slug = os.getenv("SEED_ORG_SLUG", "atlas")
+    campaign_name = os.getenv("SEED_DEMO_CAMPAIGN_NAME", "Campaña Demo 2027")
+
+    if not lucy_password or not activista_password:
+        logger.info(
+            "SEED_LUCY_PASSWORD / SEED_ACTIVISTA_PASSWORD not set — "
+            "skipping demo-activist seed (opt-in, set both to enable)."
+        )
+        return
+
+    with SessionLocal() as db:
+        # -- resolve org ----------------------------------------------------
+        org = db.execute(
+            select(Organization).where(Organization.slug == org_slug)
+        ).scalar_one_or_none()
+        if org is None:
+            logger.warning(
+                "Demo-activist seed: org with slug '%s' not found — skipping.", org_slug
+            )
+            return
+
+        # -- demo campaign --------------------------------------------------
+        campaign = db.execute(
+            select(Campaign).where(
+                Campaign.organization_id == org.id,
+                Campaign.name == campaign_name,
+            )
+        ).scalar_one_or_none()
+        if campaign is None:
+            campaign = Campaign(
+                name=campaign_name,
+                cycle=2027,
+                organization_id=org.id,
+            )
+            db.add(campaign)
+            db.flush()
+            logger.info("Seeded demo campaign '%s'", campaign_name)
+
+        # -- lucy (LIDER) ---------------------------------------------------
+        lucy = db.execute(
+            select(User).where(User.email == lucy_email)
+        ).scalar_one_or_none()
+        if lucy is None:
+            lucy = User(
+                email=lucy_email,
+                full_name="Lucy — Dirigente de Activismo",
+                role=UserRole.LIDER,
+                organization_id=org.id,
+                hashed_password=hash_password(lucy_password),
+                is_active=True,
+                must_change_password=False,
+            )
+            db.add(lucy)
+            db.flush()
+            logger.info("Seeded demo LIDER '%s'", lucy_email)
+
+        # -- activista (ACTIVISTA) ------------------------------------------
+        activista = db.execute(
+            select(User).where(User.email == activista_email)
+        ).scalar_one_or_none()
+        if activista is None:
+            activista = User(
+                email=activista_email,
+                full_name="Activista Demo",
+                role=UserRole.ACTIVISTA,
+                organization_id=org.id,
+                lider_id=lucy.id,
+                hashed_password=hash_password(activista_password),
+                is_active=True,
+                must_change_password=False,
+                seccion="0001",
+            )
+            db.add(activista)
+            db.flush()
+            logger.info("Seeded demo ACTIVISTA '%s'", activista_email)
+
+        # -- campaign memberships (idempotent by unique constraint) ---------
+        for user, mem_role in ((lucy, UserRole.LIDER), (activista, UserRole.ACTIVISTA)):
+            existing_mem = db.execute(
+                select(CampaignMembership).where(
+                    CampaignMembership.user_id == user.id,
+                    CampaignMembership.campaign_id == campaign.id,
+                )
+            ).scalar_one_or_none()
+            if existing_mem is None:
+                db.add(
+                    CampaignMembership(
+                        user_id=user.id,
+                        campaign_id=campaign.id,
+                        role=mem_role,
+                    )
+                )
+                logger.info(
+                    "Seeded campaign membership: %s → %s (%s)",
+                    user.email, campaign_name, mem_role.value,
+                )
+
+        db.commit()
 
 
 def _seed_global_privacy_notice() -> None:

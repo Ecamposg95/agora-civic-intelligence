@@ -35,6 +35,12 @@ LEADERSHIP_USERS = [
     ("lucy@atlastech.mx", "Lucy — Dirigente de Activismo", UserRole.LIDER, "78451289"),
 ]
 
+# Activist user seeded under lucy's leadership (lider_id resolved at seed time).
+# (email, full_name, role, password)
+ACTIVIST_USERS = [
+    ("activista@atlastech.mx", "Activista Demo", UserRole.ACTIVISTA, "78451289"),
+]
+
 
 def main() -> None:
     # Only the SQLite-safe tables (electoral_areas uses PostGIS geometry).
@@ -80,11 +86,36 @@ def main() -> None:
                         is_active=True,
                     )
                 )
+        # Flush so lucy has an id before we link the activista to her.
+        db.flush()
+
+        lucy = db.execute(
+            select(User).where(User.email == "lucy@atlastech.mx")
+        ).scalar_one_or_none()
+
+        for email, name, role, password in ACTIVIST_USERS:
+            exists = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+            if exists is None:
+                db.add(
+                    User(
+                        email=email,
+                        full_name=name,
+                        role=role,
+                        organization_id=org.id,
+                        lider_id=lucy.id if lucy else None,
+                        hashed_password=hash_password(password),
+                        must_change_password=False,
+                        is_active=True,
+                        seccion="0001",
+                    )
+                )
+
         db.commit()
 
     print("✓ Seed complete")
     print(f"  Login: admin@agora.gob.mx / {DEMO_PASSWORD}  (rol admin)")
     print("  Login: lucy@atlastech.mx / 78451289  (rol lider — dirigente de activismo)")
+    print("  Login: activista@atlastech.mx / 78451289  (rol activista — bajo lucy)")
 
 
 if __name__ == "__main__":
