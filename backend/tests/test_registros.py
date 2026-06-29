@@ -92,8 +92,44 @@ def test_activista_sees_only_own_lider_sees_structure():
         _make(db, a2, "Persona A2")
         own, total_own = registro_service.list_registros(db, a1, None, 50, 0)
         assert {r.nombre_completo for r in own} == {"Persona A1"}
+        assert total_own == 1
         seen, total_l = registro_service.list_registros(db, lider, None, 50, 0)
         assert {r.nombre_completo for r in seen} == {"Persona A1", "Persona A2"}
+        assert total_l == 2
+        own2, _ = registro_service.list_registros(db, a2, None, 50, 0)
+        assert {r.nombre_completo for r in own2} == {"Persona A2"}
+    finally:
+        db.query(Registro).delete()
+        db.commit()
+        db.close()
+
+
+def test_update_consent_false_raises():
+    from app.services import registro_service
+    from app.schemas.registro import RegistroUpdate
+    import pytest
+    db = TestingSessionLocal()
+    try:
+        ctx = _camp_ctx(db, "activista1@alpha.gov", ALPHA_CAMPAIGN_ID)
+        r = _make(db, ctx, "Update Consent Test")
+        with pytest.raises(registro_service.ConsentRequired):
+            registro_service.update_registro(db, ctx, r.id, RegistroUpdate(consentimiento=False))
+    finally:
+        db.query(Registro).delete()
+        db.commit()
+        db.close()
+
+
+def test_soft_delete_excludes_from_list_and_get():
+    from app.services import registro_service
+    db = TestingSessionLocal()
+    try:
+        ctx = _camp_ctx(db, "activista1@alpha.gov", ALPHA_CAMPAIGN_ID)
+        r = _make(db, ctx, "To Delete")
+        assert registro_service.delete_registro(db, ctx, r.id) is True
+        rows, total = registro_service.list_registros(db, ctx, None, 50, 0)
+        assert total == 0 and rows == []
+        assert registro_service.get_registro(db, ctx, r.id) is None
     finally:
         db.query(Registro).delete()
         db.commit()

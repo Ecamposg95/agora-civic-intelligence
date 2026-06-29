@@ -22,7 +22,7 @@ class ConsentRequired(Exception):
     """Raised when a registro is created/updated without consentimiento=True."""
 
 
-def _role_scoped(db: Session, ctx: CampaignContext):
+def _role_scoped(ctx: CampaignContext):
     """Base SELECT for registros, filtered by tenant/campaign AND role scope."""
     stmt = scoped_query(Registro, ctx)
     if ctx.is_superadmin:
@@ -88,7 +88,7 @@ def create_registro(db: Session, ctx: CampaignContext, data: RegistroCreate) -> 
 def list_registros(
     db: Session, ctx: CampaignContext, q: Optional[str], limit: int, offset: int
 ) -> tuple[list[Registro], int]:
-    stmt = _role_scoped(db, ctx)
+    stmt = _role_scoped(ctx)
     if q:
         like = f"%{q}%"
         stmt = stmt.where(
@@ -109,7 +109,7 @@ def get_registro(
     db: Session, ctx: CampaignContext, registro_id: str
 ) -> Optional[Registro]:
     return db.execute(
-        _role_scoped(db, ctx).where(Registro.id == registro_id)
+        _role_scoped(ctx).where(Registro.id == registro_id)
     ).scalar_one_or_none()
 
 
