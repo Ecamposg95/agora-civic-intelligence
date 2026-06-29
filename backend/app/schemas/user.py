@@ -20,6 +20,9 @@ class UserCreate(UserBase):
     # Honored only for superadmins; otherwise the caller's tenant is used
     # (Golden Rule #2 — tenant from context, not arbitrary input).
     organization_id: str | None = None
+    # Activist-structure fields (SPA-2 T6).
+    lider_id: str | None = None
+    seccion: str | None = Field(default=None, max_length=20)
 
 
 class UserUpdate(BaseModel):
@@ -27,6 +30,10 @@ class UserUpdate(BaseModel):
     role: UserRole | None = None
     phone: str | None = Field(default=None, max_length=40)
     is_active: bool | None = None
+    # Activist-structure fields (SPA-2 T6). None means "not sent"; use
+    # model_fields_set to distinguish "omit" from "clear" for lider_id.
+    lider_id: str | None = None
+    seccion: str | None = Field(default=None, max_length=20)
 
 
 class SelfUpdate(BaseModel):
@@ -43,6 +50,8 @@ class UserRead(UserBase):
     organization_id: str | None
     is_active: bool
     must_change_password: bool
+    lider_id: str | None
+    seccion: str | None
     created_at: datetime
     updated_at: datetime
 

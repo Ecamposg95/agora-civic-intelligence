@@ -57,6 +57,36 @@ def _not_found() -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
 
+def _validate_lider(
+    db: Session,
+    ctx: TenantContext,
+    lider_id: str | None,
+    org_id: str | None,
+    target_id: str | None = None,
+) -> None:
+    """Validate that lider_id references a valid LIDER in the same tenant."""
+    if lider_id is None:
+        return
+    if lider_id == target_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A user cannot be their own leader",
+        )
+    lider = db.execute(
+        select(User).where(User.id == lider_id, User.deleted_at.is_(None))
+    ).scalar_one_or_none()
+    if lider is None or lider.role != UserRole.LIDER:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="lider_id must reference a LIDER user",
+        )
+    if not ctx.is_superadmin and lider.organization_id != org_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="lider_id must be in the same organization",
+        )
+
+
 def _assert_can_manage(ctx: TenantContext, target: User) -> None:
     """Tenant + privilege guard for acting on a target user."""
     if ctx.is_superadmin:
@@ -151,6 +181,8 @@ def create_user(db: Session, ctx: TenantContext, data: UserCreate) -> tuple[User
             status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
         )
 
+    _validate_lider(db, ctx, data.lider_id, org_id)
+
     temp_password = data.password or generate_temp_password()
     user = User(
         organization_id=org_id,
@@ -161,6 +193,8 @@ def create_user(db: Session, ctx: TenantContext, data: UserCreate) -> tuple[User
         hashed_password=hash_password(temp_password),
         must_change_password=True,
         is_active=True,
+        lider_id=data.lider_id,
+        seccion=data.seccion,
         created_by=ctx.user.id,
         updated_by=ctx.user.id,
     )
@@ -196,6 +230,11 @@ def update_user(db: Session, ctx: TenantContext, user_id: str, data: UserUpdate)
         if user.id == ctx.user.id and data.is_active is False:
             raise _forbidden("You cannot deactivate your own account")
         user.is_active = data.is_active
+    if "lider_id" in data.model_fields_set:
+        _validate_lider(db, ctx, data.lider_id, user.organization_id, target_id=user.id)
+        user.lider_id = data.lider_id
+    if data.seccion is not None:
+        user.seccion = data.seccion
 
     user.updated_by = ctx.user.id
     record_audit(
