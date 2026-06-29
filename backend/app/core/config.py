@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     SECRET_KEY: str = Field(default="change-me-in-production")
     ALGORITHM: str = Field(default="HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60)
+    # Fernet key for encrypting clave de elector at rest. No default: the app
+    # must fail rather than store sensitive data in clear. Generate with:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    FERNET_KEY: str = Field(default="")
 
     # --- CORS ---------------------------------------------------------------
     # NoDecode: take the raw env value (comma-separated string) instead of

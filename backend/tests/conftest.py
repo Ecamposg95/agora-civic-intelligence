@@ -5,6 +5,12 @@ app's ``get_db`` dependency overridden. Only the non-geometry tables are created
 so the suite needs no PostGIS — tenancy/auth/pagination behavior is unaffected.
 """
 
+import os
+
+from cryptography.fernet import Fernet
+
+os.environ.setdefault("FERNET_KEY", Fernet.generate_key().decode())
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
