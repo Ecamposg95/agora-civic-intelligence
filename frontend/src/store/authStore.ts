@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 import { getCurrentUser, login as loginRequest } from "@/api/auth";
 import { tokenStorage } from "@/api/client";
+import { useCampaignStore } from "@/store/campaignStore";
 import type { User } from "@/types/auth";
 
 interface AuthState {
@@ -43,6 +44,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: () => {
     tokenStorage.clear();
+    // Reset campaign selection so the next user starts from a clean state
+    // (prevents a superadmin's "consolidated" choice leaking to the next login).
+    useCampaignStore.getState().reset();
     set({ user: null, token: null, isAuthenticated: false, error: null });
   },
 

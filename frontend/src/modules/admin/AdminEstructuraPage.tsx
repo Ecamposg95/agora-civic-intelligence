@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { DataState } from "@/components/ui/DataState";
 import { Modal } from "@/components/ui/Modal";
 import { useAsync } from "@/hooks/useAsync";
+import { useCampaignStore } from "@/store/campaignStore";
 import type { UserRole } from "@/types/auth";
 import type { UserCreatePayload, UserUpdatePayload } from "@/types/users";
 
@@ -27,7 +28,8 @@ interface EditableUser {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function AdminEstructuraPage() {
-  const { data, loading, error, reload } = useAsync(getEstructura, []);
+  const activeId = useCampaignStore((s) => s.activeId);
+  const { data, loading, error, reload } = useAsync(getEstructura, [activeId]);
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<EditableUser | null>(null);
 

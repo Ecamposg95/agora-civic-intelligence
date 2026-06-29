@@ -181,6 +181,56 @@ def test_create_activista_with_lider_and_seccion(client: TestClient) -> None:
     assert resp.json()["user"]["seccion"] == "0007"
 
 
+def test_update_user_can_clear_seccion(client: TestClient) -> None:
+    """PATCH with seccion=null must clear the field (model_fields_set semantics)."""
+    from sqlalchemy import select
+
+    from tests.conftest import TestingSessionLocal
+
+    db = TestingSessionLocal()
+    # activista1@alpha.gov is seeded with seccion="0001"
+    act_id = db.execute(
+        select(User.id).where(User.email == "activista1@alpha.gov")
+    ).scalar_one()
+    db.close()
+
+    h = auth_headers(client, "admin@alpha.gov")
+
+    # Confirm baseline seccion is set
+    before = client.get(f"/api/users/{act_id}", headers=h).json()
+    assert before["seccion"] == "0001"
+
+    # Explicitly clear it
+    resp = client.patch(f"/api/users/{act_id}", headers=h, json={"seccion": None})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["seccion"] is None
+
+    # Restore so other tests aren't affected
+    client.patch(f"/api/users/{act_id}", headers=h, json={"seccion": "0001"})
+
+
+def test_update_user_omit_seccion_leaves_it_unchanged(client: TestClient) -> None:
+    """PATCH without seccion key must NOT touch the existing value."""
+    from sqlalchemy import select
+
+    from tests.conftest import TestingSessionLocal
+
+    db = TestingSessionLocal()
+    act_id = db.execute(
+        select(User.id).where(User.email == "activista1@alpha.gov")
+    ).scalar_one()
+    db.close()
+
+    h = auth_headers(client, "admin@alpha.gov")
+    before = client.get(f"/api/users/{act_id}", headers=h).json()
+    existing_seccion = before["seccion"]
+
+    # Patch only full_name, omit seccion
+    resp = client.patch(f"/api/users/{act_id}", headers=h, json={"full_name": "Alpha Activista 1"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["seccion"] == existing_seccion
+
+
 def test_lider_id_must_be_a_lider(client: TestClient) -> None:
     from sqlalchemy import select
 

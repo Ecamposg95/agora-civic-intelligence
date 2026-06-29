@@ -1,5 +1,8 @@
 """Tests for admin_service.estructura — árbol líder→activistas con conteos."""
+from sqlalchemy import select
+
 from app.models.registro import Registro
+from app.models.user import User, UserRole
 from tests.conftest import TestingSessionLocal, ALPHA_CAMPAIGN_ID, BETA_CAMPAIGN_ID
 
 
@@ -70,5 +73,47 @@ def test_estructura_tenant_isolation():
         # All nodes belong to alpha
         for node in tree:
             assert "alpha" in node["email"] or "alpha" in (node.get("full_name") or "")
+    finally:
+        db.query(Registro).delete(); db.commit(); db.close()
+
+
+def test_estructura_activistas_org_filter():
+    """Activistas sub-query must exclude cross-tenant users even if lider_id matches.
+
+    This guards against a data-integrity violation where an activista from org B
+    has a lider_id pointing at a lider in org A.  The estructura tree for org A
+    must not surface the alien activista.
+    """
+    from app.core.security import hash_password
+    from app.services import admin_service
+    from tests.test_admin_registros import _camp_ctx
+    db = TestingSessionLocal()
+    try:
+        # Find alpha's lider and beta's org
+        alpha_lider = db.execute(
+            select(User).where(User.email == "lider@alpha.gov")
+        ).scalar_one()
+        beta_activista_row = db.execute(
+            select(User).where(User.email == "activista_beta@beta.gov")
+        ).scalar_one()
+
+        # Simulate a data-integrity violation: beta activista's lider_id
+        # points at alpha's lider.
+        original_lider_id = beta_activista_row.lider_id
+        beta_activista_row.lider_id = alpha_lider.id
+        db.flush()
+
+        admin = _camp_ctx(db, "admin@alpha.gov", ALPHA_CAMPAIGN_ID)
+        tree = admin_service.estructura(db, admin)
+
+        # Beta's activista must NOT appear under alpha's lider node.
+        lider_node = next((n for n in tree if n["email"] == "lider@alpha.gov"), None)
+        assert lider_node is not None
+        activista_emails = {a["email"] for a in lider_node["activistas"]}
+        assert "activista_beta@beta.gov" not in activista_emails
+
+        # Restore to avoid poisoning other tests.
+        beta_activista_row.lider_id = original_lider_id
+        db.commit()
     finally:
         db.query(Registro).delete(); db.commit(); db.close()

@@ -14,6 +14,7 @@ import { DataTable, type Column } from "@/components/ui/DataTable";
 import { SkeletonRows } from "@/components/ui/SkeletonCard";
 import { SearchIcon } from "@/components/ui/icons";
 import { useAuthStore } from "@/store/authStore";
+import { useCampaignStore } from "@/store/campaignStore";
 
 const PAGE = 20;
 
@@ -89,6 +90,7 @@ function RevealFlash({ reveal, onDismiss }: RevealFlashProps) {
 export function AdminRegistrosPage() {
   const role = useAuthStore((s) => s.user?.role);
   const canReveal = role === "admin" || role === "superadmin";
+  const activeId = useCampaignStore((s) => s.activeId);
 
   const [data, setData] = useState<AdminRegistroList | null>(null);
   const [offset, setOffset] = useState(0);
@@ -131,6 +133,11 @@ export function AdminRegistrosPage() {
     return () => clearTimeout(t);
   }, [qInput, seccionInput, liderInput, activistaInput, sinceInput, untilInput]);
 
+  // Reset to first page whenever the active base (or consolidated) changes.
+  useEffect(() => {
+    setOffset(0);
+  }, [activeId]);
+
   const reload = useCallback(() => setRetryTick((n) => n + 1), []);
 
   useEffect(() => {
@@ -160,7 +167,7 @@ export function AdminRegistrosPage() {
     return () => {
       ignore = true;
     };
-  }, [offset, q, seccion, liderId, activistaId, since, until, retryTick]);
+  }, [offset, q, seccion, liderId, activistaId, since, until, retryTick, activeId]);
 
   const items = useMemo(() => data?.items ?? [], [data]);
   const hasFilters = Boolean(

@@ -260,12 +260,15 @@ def estructura(db: Session, ctx: CampaignContext) -> list[dict]:
 
     tree: list[dict] = []
     for lider in lideres:
-        acts = db.execute(
-            select(User).where(
-                User.lider_id == lider.id,
-                User.deleted_at.is_(None),
-            )
-        ).scalars().all()
+        acts_q = select(User).where(
+            User.lider_id == lider.id,
+            User.deleted_at.is_(None),
+        )
+        # In single-tenant mode, guard against stale cross-tenant lider_id
+        # references that could surface another org's activistas.
+        if ctx.organization_id is not None:
+            acts_q = acts_q.where(User.organization_id == ctx.organization_id)
+        acts = db.execute(acts_q).scalars().all()
         act_nodes = [
             {
                 "id": a.id,

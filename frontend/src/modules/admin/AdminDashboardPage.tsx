@@ -19,9 +19,11 @@ import { DataState } from "@/components/ui/DataState";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { CHART_PALETTE, CHART_TOOLTIP_STYLE } from "@/constants/ui";
 import { useAsync } from "@/hooks/useAsync";
+import { useCampaignStore } from "@/store/campaignStore";
 
 export function AdminDashboardPage() {
-  const { data, loading, error, reload } = useAsync(getMetricas, []);
+  const activeId = useCampaignStore((s) => s.activeId);
+  const { data, loading, error, reload } = useAsync(getMetricas, [activeId]);
   const uid = useId();
   const gradientId = `adminDailyFill-${uid.replace(/:/g, "")}`;
 

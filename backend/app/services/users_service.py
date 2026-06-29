@@ -233,7 +233,10 @@ def update_user(db: Session, ctx: TenantContext, user_id: str, data: UserUpdate)
     if "lider_id" in data.model_fields_set:
         _validate_lider(db, ctx, data.lider_id, user.organization_id, target_id=user.id)
         user.lider_id = data.lider_id
-    if data.seccion is not None:
+    if "seccion" in data.model_fields_set:
+        # Use model_fields_set so an explicit null clears the field (mirrors
+        # lider_id handling above).  Omitting seccion from the payload leaves
+        # the existing value untouched.
         user.seccion = data.seccion
 
     user.updated_by = ctx.user.id
