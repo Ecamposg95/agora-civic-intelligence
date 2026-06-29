@@ -30,6 +30,7 @@ from app.core.logging import get_logger
 from app.core.security import hash_password
 from app.database import Base, SessionLocal, engine
 from app.models.organization import Organization
+from app.models.privacy import PrivacyNotice
 from app.models.user import User, UserRole
 
 logger = get_logger("agora.bootstrap")
@@ -149,6 +150,39 @@ def _seed() -> None:
                 )
                 logger.info("Seeded super-admin '%s'", admin_email)
         db.commit()
+
+    _seed_global_privacy_notice()
+
+
+def _seed_global_privacy_notice() -> None:
+    """Idempotently seed the global platform aviso de privacidad v1."""
+    with SessionLocal() as db:
+        existing = db.execute(
+            select(PrivacyNotice).where(
+                PrivacyNotice.organization_id.is_(None),
+                PrivacyNotice.version == "v1",
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            db.add(
+                PrivacyNotice(
+                    organization_id=None,
+                    version="v1",
+                    is_active=True,
+                    body=(
+                        "Aviso de Privacidad — versión 1.0\n\n"
+                        "De conformidad con la Ley Federal de Protección de Datos "
+                        "Personales en Posesión de los Particulares, sus datos personales "
+                        "son recabados con fines de participación cívica y organización "
+                        "electoral. El titular puede ejercer derechos ARCO ante el "
+                        "responsable del tratamiento."
+                    ),
+                )
+            )
+            db.commit()
+            logger.info("Seeded global privacy notice v1")
+        else:
+            logger.debug("Global privacy notice v1 already present — skipping")
 
 
 def run_bootstrap() -> None:

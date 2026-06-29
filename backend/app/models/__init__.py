@@ -11,6 +11,7 @@ from app.models.census import CensusMetric  # noqa: F401
 from app.models.electoral_area import ElectoralArea
 from app.models.ingestion import DataSource, IngestRun  # noqa: F401
 from app.models.organization import Organization
+from app.models.privacy import PrivacyAcceptance, PrivacyNotice  # noqa: F401
 from app.models.registro import Registro  # noqa: F401
 from app.models.user import User
 
@@ -28,6 +29,8 @@ __all__ = [
     "IngestRun",
     "Organization",
     "Party",
+    "PrivacyAcceptance",
+    "PrivacyNotice",
     "Registro",
     "User",
 ]

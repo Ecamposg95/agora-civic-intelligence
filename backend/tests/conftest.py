@@ -30,6 +30,7 @@ from app.models.census import CensusMetric
 from app.models.electoral_area import ElectoralArea
 from app.models.ingestion import DataSource, IngestRun
 from app.models.organization import Organization
+from app.models.privacy import PrivacyAcceptance, PrivacyNotice
 from app.models.registro import Registro
 from app.models.user import User, UserRole
 
@@ -65,6 +66,8 @@ Base.metadata.create_all(
         IngestRun.__table__,
         CensusMetric.__table__,
         Registro.__table__,
+        PrivacyNotice.__table__,
+        PrivacyAcceptance.__table__,
     ],
 )
 
@@ -161,6 +164,33 @@ def seed_data():
         beta_act = db.execute(select(User).where(User.email == "activista_beta@beta.gov")).scalar_one()
         db.add(CampaignMembership(user_id=beta_act.id, campaign_id=beta_camp.id, role=beta_act.role))
         db.commit()
+
+        # Seed the global platform aviso de privacidad v1 (organization_id=None).
+        from sqlalchemy import select as _select
+
+        existing_notice = db.execute(
+            _select(PrivacyNotice).where(
+                PrivacyNotice.organization_id.is_(None),
+                PrivacyNotice.version == "v1",
+            )
+        ).scalar_one_or_none()
+        if existing_notice is None:
+            db.add(
+                PrivacyNotice(
+                    organization_id=None,
+                    version="v1",
+                    is_active=True,
+                    body=(
+                        "Aviso de Privacidad — versión 1.0\n\n"
+                        "De conformidad con la Ley Federal de Protección de Datos "
+                        "Personales en Posesión de los Particulares, sus datos personales "
+                        "son recabados con fines de participación cívica y organización "
+                        "electoral. El titular puede ejercer derechos ARCO ante el "
+                        "responsable del tratamiento."
+                    ),
+                )
+            )
+            db.commit()
     finally:
         db.close()
     yield
