@@ -1,4 +1,13 @@
-export type UserRole = "superadmin" | "admin" | "analyst" | "viewer" | "lider" | "activista";
+export type UserRole =
+  | "superadmin"
+  | "admin"
+  | "coordinador"
+  | "lider"
+  | "activista"
+  | "capturista"
+  | "analyst"
+  | "viewer"
+  | "consulta";
 
 export interface User {
   id: string;
