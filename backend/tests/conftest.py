@@ -9,6 +9,9 @@ import os
 
 from cryptography.fernet import Fernet
 
+# Must be set before app imports so ElectoralArea's geometry column degrades to
+# Text (the model branches on settings.DATABASE_URL at import time).
+os.environ.setdefault("DATABASE_URL", "sqlite://")
 os.environ.setdefault("FERNET_KEY", Fernet.generate_key().decode())
 
 import pytest
