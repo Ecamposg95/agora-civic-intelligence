@@ -165,6 +165,8 @@ def seed_data():
             db.add(CampaignMembership(user_id=u.id, campaign_id=camp.id, role=u.role))
         beta_act = db.execute(select(User).where(User.email == "activista_beta@beta.gov")).scalar_one()
         db.add(CampaignMembership(user_id=beta_act.id, campaign_id=beta_camp.id, role=beta_act.role))
+        beta_admin_user = db.execute(select(User).where(User.email == "admin@beta.gov")).scalar_one()
+        db.add(CampaignMembership(user_id=beta_admin_user.id, campaign_id=beta_camp.id, role=beta_admin_user.role))
         db.commit()
 
         # Seed the global platform aviso de privacidad v1 (organization_id=None).

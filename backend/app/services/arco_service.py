@@ -5,8 +5,9 @@ SECURITY/COMPLIANCE notes:
   PrivacyAcceptances via DB CASCADE) so that NO PII remains.
 - The AuditLog entry is written and flushed BEFORE ``db.delete(reg)`` so that
   the audit trail survives even if something goes wrong during deletion.
-- Tenant scope is enforced via ``_role_scoped`` / ``scoped_query`` — an admin
-  can only delete registros that belong to their own organization/campaign.
+- Tenant scope is enforced via a direct SQL predicate (organization_id / campaign_id)
+  that intentionally skips the ``deleted_at IS NULL`` soft-delete filter so that
+  soft-deleted rows can still be physically purged by an ARCO request.
 - The ArcoRequest trail row is NEVER deleted — it is the compliance evidence.
 - ``hard_delete_titular`` is idempotent: if the registro no longer exists it
   returns 0 without raising.
@@ -24,7 +25,6 @@ from app.models.arco import ArcoEstado, ArcoRequest, ArcoTipo
 from app.models.privacy import PrivacyAcceptance
 from app.models.registro import Registro
 from app.services.audit_service import record_audit
-from app.services.registro_service import _role_scoped
 
 
 def create_request(
@@ -68,7 +68,8 @@ def hard_delete_titular(
     """Permanently destroy Registro rows for a data-subject ARCO request.
 
     For each ``registro_id`` in ``registro_ids``:
-    1. Resolve the Registro via the role-scoped query (tenant + role enforcement).
+    1. Resolve the Registro via a direct tenant-scoped query (bypasses soft-delete
+       filter so that soft-deleted rows are also physically purged).
     2. Write an AuditLog entry (action="registro.arco_hard_delete") and FLUSH it
        BEFORE calling ``db.delete()`` so the audit outlives the row.
     3. Physically delete the row; PrivacyAcceptance rows cascade automatically.
@@ -83,10 +84,21 @@ def hard_delete_titular(
     deleted = 0
 
     for reg_id in registro_ids:
-        # Resolve via role-scoped query — returns None if out-of-scope or not found.
-        reg = db.execute(
-            _role_scoped(ctx).where(Registro.id == reg_id)
-        ).scalar_one_or_none()
+        # C1 FIX: bypass scoped_query's `deleted_at IS NULL` filter so that
+        # soft-deleted rows are visible and can be physically purged.  Tenant
+        # scope is still enforced explicitly to prevent cross-tenant deletes.
+        #
+        # Mirror scoped_query's superadmin-all logic:
+        #   • superadmin with no base org  → consolidated view; skip all tenant filters
+        #   • superadmin with a base org   → org filter only (no campaign restriction)
+        #   • regular admin                → org + campaign filter
+        stmt = select(Registro).where(Registro.id == reg_id)
+        superadmin_all = getattr(ctx, "is_superadmin", False) and ctx.organization_id is None
+        if not superadmin_all:
+            stmt = stmt.where(Registro.organization_id == ctx.organization_id)
+            if not ctx.is_superadmin:
+                stmt = stmt.where(Registro.campaign_id == ctx.campaign_id)
+        reg = db.execute(stmt).scalar_one_or_none()
 
         if reg is None:
             # Already deleted or out of scope — idempotent no-op for this id.

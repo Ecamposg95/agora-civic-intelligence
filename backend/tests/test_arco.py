@@ -65,29 +65,29 @@ def test_arco_registro_id_not_fk_to_registros():
 
 
 def test_arco_titular_ref_max_length():
-    """titular_ref column must be shorter than 18 chars capacity or just opaque — it may NOT store a full 18-char clave."""
-    # The schema validator test: ArcoRequestCreate must reject a 18-char alphanum titular_ref
+    """titular_ref column must be shorter than 18 chars; schema must reject a full 18-char clave."""
+    import pytest
     from pydantic import ValidationError
     from app.schemas.arco import ArcoRequestCreate
-    from app.models.arco import ArcoTipo
+    from app.models.arco import ArcoRequest, ArcoTipo
 
-    full_clave = "ABCDEF123456789012"  # 18 alphanum — must be rejected
-    try:
-        req = ArcoRequestCreate(
+    full_clave = "ABCDEF123456789012"  # 18 alphanum — must be rejected by the schema
+
+    # 1. Schema must raise ValidationError for a full 18-char clave.
+    with pytest.raises(ValidationError):
+        ArcoRequestCreate(
             registro_id="some-id",
             tipo=ArcoTipo.CANCELACION,
             titular_ref=full_clave,
         )
-        # If it did NOT raise, the schema is too permissive — but we'll also
-        # validate the column max_length separately.
-        col = __import__("app.models.arco", fromlist=["ArcoRequest"]).ArcoRequest.__table__.c["titular_ref"]
-        # Column length must be < 18 OR the schema should block full claves
-        assert col.type.length < 18, (
-            "titular_ref column must not accommodate a full 18-char clave"
-        )
-    except (ValidationError, Exception):
-        # Schema rejected it — that is the expected outcome
-        pass
+
+    # 2. Column max_length must be strictly less than 18 so it can never store a
+    #    full clave de elector at the persistence layer either.
+    col = ArcoRequest.__table__.c["titular_ref"]
+    assert col.type.length < 18, (
+        f"titular_ref column length {col.type.length} must be < 18 "
+        "(must not accommodate a full 18-char clave de elector)"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -431,3 +431,183 @@ def test_arco_create_and_execute_via_router(seed_data, client):
         db2.query(Registro).delete()
         db2.commit()
         db2.close()
+
+
+# ---------------------------------------------------------------------------
+# I2. Router: cross-tenant ejecutar returns 404
+# ---------------------------------------------------------------------------
+
+def test_arco_cross_tenant_ejecutar_returns_404(seed_data, client):
+    """Beta admin cannot execute an Alpha ArcoRequest (different tenant → 404)."""
+    from sqlalchemy import select
+
+    from app.dependencies import CampaignContext
+    from app.models.user import User
+    from app.schemas.registro import RegistroCreate
+    from app.services import registro_service
+    from app.services.arco_service import create_request
+    from app.models.arco import ArcoTipo
+    from tests.conftest import ALPHA_CAMPAIGN_ID, BETA_CAMPAIGN_ID, TestingSessionLocal, auth_headers
+
+    db = TestingSessionLocal()
+    try:
+        # Alpha activista creates a registro
+        act = db.execute(select(User).where(User.email == "activista1@alpha.gov")).scalar_one()
+        act_ctx = CampaignContext(
+            user=act, organization_id=act.organization_id,
+            role=act.role, campaign_id=ALPHA_CAMPAIGN_ID,
+        )
+        reg = registro_service.create_registro(
+            db, act_ctx,
+            RegistroCreate(nombre_completo="Cross-Tenant Test", consentimiento=True),
+        )
+        reg_id = reg.id
+
+        # Alpha admin creates an ARCO solicitud
+        alpha_admin = db.execute(select(User).where(User.email == "admin@alpha.gov")).scalar_one()
+        alpha_ctx = CampaignContext(
+            user=alpha_admin, organization_id=alpha_admin.organization_id,
+            role=alpha_admin.role, campaign_id=ALPHA_CAMPAIGN_ID,
+        )
+        arco = create_request(
+            db, alpha_ctx,
+            registro_id=reg_id,
+            tipo=ArcoTipo.CANCELACION,
+            motivo="Cross-tenant isolation test",
+            titular_ref="MASKED",
+        )
+        alpha_arco_id = arco.id
+    finally:
+        db.close()
+
+    # Beta admin tries to execute the Alpha solicitud — must get 404
+    beta_hdrs = auth_headers(client, "admin@beta.gov")
+    beta_hdrs["X-Campaign-Id"] = BETA_CAMPAIGN_ID
+    resp = client.post(
+        f"/api/arco/solicitudes/{alpha_arco_id}/ejecutar",
+        headers=beta_hdrs,
+    )
+    assert resp.status_code == 404, (
+        f"Beta admin must not see Alpha ArcoRequest; got {resp.status_code}: {resp.text}"
+    )
+
+    # Cleanup
+    db3 = TestingSessionLocal()
+    try:
+        from app.models.arco import ArcoRequest
+        from app.models.audit_log import AuditLog
+        from app.models.privacy import PrivacyAcceptance
+        from app.models.registro import Registro as _Registro
+        db3.query(AuditLog).filter(AuditLog.action == "registro.arco_hard_delete").delete()
+        db3.query(ArcoRequest).delete()
+        db3.query(PrivacyAcceptance).delete()
+        db3.query(_Registro).delete()
+        db3.commit()
+    finally:
+        db3.close()
+
+
+# ---------------------------------------------------------------------------
+# C1 (soft-delete test) — soft-deleted registro is physically purged by ARCO
+# ---------------------------------------------------------------------------
+
+def test_hard_delete_purges_soft_deleted_registro(seed_data):
+    """ARCO hard-delete must find and physically destroy a soft-deleted Registro.
+
+    Regression test for C1: before the fix, scoped_query filtered out
+    soft-deleted rows (deleted_at IS NOT NULL) so hard_delete_titular would
+    silently no-op leaving PII in the database.
+    """
+    from sqlalchemy import select
+
+    from app.dependencies import CampaignContext
+    from app.models.arco import ArcoRequest, ArcoEstado, ArcoTipo
+    from app.models.audit_log import AuditLog
+    from app.models.privacy import PrivacyAcceptance
+    from app.models.registro import Registro
+    from app.models.user import User
+    from app.schemas.registro import RegistroCreate
+    from app.services import registro_service
+    from app.services.arco_service import create_request, hard_delete_titular
+    from tests.conftest import ALPHA_CAMPAIGN_ID, TestingSessionLocal
+
+    db = TestingSessionLocal()
+    try:
+        admin = db.execute(select(User).where(User.email == "admin@alpha.gov")).scalar_one()
+        act = db.execute(select(User).where(User.email == "activista1@alpha.gov")).scalar_one()
+
+        act_ctx = CampaignContext(
+            user=act, organization_id=act.organization_id,
+            role=act.role, campaign_id=ALPHA_CAMPAIGN_ID,
+        )
+        admin_ctx = CampaignContext(
+            user=admin, organization_id=admin.organization_id,
+            role=admin.role, campaign_id=ALPHA_CAMPAIGN_ID,
+        )
+
+        # 1. Create a registro
+        reg = registro_service.create_registro(
+            db, act_ctx,
+            RegistroCreate(nombre_completo="Soft-Delete ARCO Test", consentimiento=True),
+        )
+        reg_id = reg.id
+
+        # 2. Soft-delete the registro (simulates a prior deletion before ARCO arrives)
+        deleted_flag = registro_service.delete_registro(db, admin_ctx, reg_id)
+        assert deleted_flag is True, "Soft-delete must succeed"
+
+        # Verify it is soft-deleted (row exists but deleted_at is set)
+        raw = db.get(Registro, reg_id)
+        assert raw is not None, "Row must exist after soft-delete (not yet physically removed)"
+        assert raw.deleted_at is not None, "deleted_at must be set after soft-delete"
+
+        # 3. Create an ARCO request for the (now soft-deleted) registro
+        arco_req = create_request(
+            db, admin_ctx,
+            registro_id=reg_id,
+            tipo=ArcoTipo.CANCELACION,
+            motivo="Subject requested erasure after soft-delete",
+            titular_ref="MASKED",
+        )
+        arco_req_id = arco_req.id
+
+        # 4. Execute the ARCO hard-delete — must find the soft-deleted row
+        count = hard_delete_titular(
+            db, admin_ctx, request_id=arco_req_id, registro_ids=[reg_id]
+        )
+        assert count == 1, (
+            f"hard_delete_titular must physically remove the soft-deleted row (got count={count}). "
+            "C1 regression: scoped_query's deleted_at filter must be bypassed."
+        )
+
+        # 5. Row must be PHYSICALLY GONE — db.get returns None even without the soft-delete filter
+        db.expire_all()  # clear session cache
+        gone = db.get(Registro, reg_id)
+        assert gone is None, (
+            "Registro must be physically removed from the DB after ARCO hard-delete"
+        )
+
+        # 6. Audit trail must exist
+        audit = db.execute(
+            select(AuditLog).where(
+                AuditLog.entity_id == reg_id,
+                AuditLog.action == "registro.arco_hard_delete",
+            )
+        ).scalar_one_or_none()
+        assert audit is not None, "AuditLog entry must be written for the hard-delete"
+
+        # 7. ArcoRequest trail must persist and be marked PROCESADA
+        arco = db.execute(
+            select(ArcoRequest).where(ArcoRequest.id == arco_req_id)
+        ).scalar_one_or_none()
+        assert arco is not None, "ArcoRequest trail must persist"
+        assert arco.estado == ArcoEstado.PROCESADA
+
+    finally:
+        db.query(PrivacyAcceptance).delete()
+        db.query(AuditLog).filter(AuditLog.action == "registro.arco_hard_delete").delete()
+        db.query(AuditLog).filter(AuditLog.action == "registro.delete").delete()
+        db.query(ArcoRequest).delete()
+        db.query(Registro).delete()
+        db.commit()
+        db.close()

@@ -65,10 +65,6 @@ def upgrade() -> None:
 
     # ── 1. Create PG enum types (idempotent via IF NOT EXISTS) ───────────────
     if is_pg:
-        bind.execute(
-            sa.text("CREATE TYPE arco_tipo AS ENUM ('ACCESO', 'RECTIFICACION', 'CANCELACION', 'OPOSICION')")
-            if False else sa.text("SELECT 1")  # placeholder — use DO block below
-        )
         # Use DO $$ … $$ to check existence before creating (no IF NOT EXISTS
         # syntax for CREATE TYPE in older PG).
         bind.execute(sa.text(
