@@ -28,6 +28,9 @@ class UserRole(str, enum.Enum):
     VIEWER = "viewer"
     LIDER = "lider"
     ACTIVISTA = "activista"
+    COORDINADOR = "coordinador"
+    CAPTURISTA = "capturista"
+    CONSULTA = "consulta"
 
 
 class User(UUIDMixin, AuditMixin, Base):
@@ -56,6 +59,10 @@ class User(UUIDMixin, AuditMixin, Base):
     # Activist-structure hierarchy: an activist points to its leader; a leader
     # has lider_id = NULL. Self-FK on users.
     lider_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    # A LIDER points to its COORDINADOR (campo→coordinación). Self-FK, like lider_id.
+    coordinador_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
     )
     seccion: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
