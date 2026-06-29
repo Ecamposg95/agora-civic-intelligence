@@ -135,6 +135,26 @@ def get_campaign_context(
 CampaignCtx = Annotated[CampaignContext, Depends(get_campaign_context)]
 
 
+def get_admin_context(
+    db: DbSession,
+    ctx: Tenant,
+    x_campaign_id: Annotated[Optional[str], Header(alias="X-Campaign-Id")] = None,
+) -> CampaignContext:
+    """Admin/console context.
+
+    - Superadmin with NO base selected → consolidated mode: organization_id=None,
+      campaign_id="" (scoped_query then returns the cross-tenant view).
+    - Anyone else (or superadmin WITH a base) → delegates to get_campaign_context,
+      which mandates a valid X-Campaign-Id and adopts the base's org for superadmin.
+    """
+    if ctx.is_superadmin and not x_campaign_id:
+        return CampaignContext(user=ctx.user, organization_id=None, role=ctx.role, campaign_id="")
+    return get_campaign_context(db, ctx, x_campaign_id)
+
+
+AdminCtx = Annotated[CampaignContext, Depends(get_admin_context)]
+
+
 def require_roles(*roles: UserRole):
     """Dependency factory enforcing that the caller holds one of ``roles``.
 

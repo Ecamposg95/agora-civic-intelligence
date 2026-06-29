@@ -2,6 +2,7 @@
 
 from fastapi.testclient import TestClient
 
+from app.models.user import User
 from tests.conftest import auth_headers
 
 
@@ -151,3 +152,104 @@ def test_search_and_filter(client: TestClient) -> None:
     assert all(u["role"] == "viewer" for u in by_role["items"])
     search = client.get("/api/users?q=admin@alpha", headers=admin).json()
     assert any(u["email"] == "admin@alpha.gov" for u in search["items"])
+
+
+def test_create_activista_with_lider_and_seccion(client: TestClient) -> None:
+    from sqlalchemy import select
+
+    from tests.conftest import TestingSessionLocal
+
+    db = TestingSessionLocal()
+    lider_id = db.execute(
+        select(User.id).where(User.email == "lider@alpha.gov")
+    ).scalar_one()
+    db.close()
+    h = auth_headers(client, "admin@alpha.gov")
+    resp = client.post(
+        "/api/users",
+        json={
+            "email": "nuevo.activista@alpha.gov",
+            "full_name": "Nuevo Act",
+            "role": "activista",
+            "lider_id": lider_id,
+            "seccion": "0007",
+        },
+        headers=h,
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["user"]["lider_id"] == lider_id
+    assert resp.json()["user"]["seccion"] == "0007"
+
+
+def test_update_user_can_clear_seccion(client: TestClient) -> None:
+    """PATCH with seccion=null must clear the field (model_fields_set semantics)."""
+    from sqlalchemy import select
+
+    from tests.conftest import TestingSessionLocal
+
+    db = TestingSessionLocal()
+    # activista1@alpha.gov is seeded with seccion="0001"
+    act_id = db.execute(
+        select(User.id).where(User.email == "activista1@alpha.gov")
+    ).scalar_one()
+    db.close()
+
+    h = auth_headers(client, "admin@alpha.gov")
+
+    # Confirm baseline seccion is set
+    before = client.get(f"/api/users/{act_id}", headers=h).json()
+    assert before["seccion"] == "0001"
+
+    # Explicitly clear it
+    resp = client.patch(f"/api/users/{act_id}", headers=h, json={"seccion": None})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["seccion"] is None
+
+    # Restore so other tests aren't affected
+    client.patch(f"/api/users/{act_id}", headers=h, json={"seccion": "0001"})
+
+
+def test_update_user_omit_seccion_leaves_it_unchanged(client: TestClient) -> None:
+    """PATCH without seccion key must NOT touch the existing value."""
+    from sqlalchemy import select
+
+    from tests.conftest import TestingSessionLocal
+
+    db = TestingSessionLocal()
+    act_id = db.execute(
+        select(User.id).where(User.email == "activista1@alpha.gov")
+    ).scalar_one()
+    db.close()
+
+    h = auth_headers(client, "admin@alpha.gov")
+    before = client.get(f"/api/users/{act_id}", headers=h).json()
+    existing_seccion = before["seccion"]
+
+    # Patch only full_name, omit seccion
+    resp = client.patch(f"/api/users/{act_id}", headers=h, json={"full_name": "Alpha Activista 1"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["seccion"] == existing_seccion
+
+
+def test_lider_id_must_be_a_lider(client: TestClient) -> None:
+    from sqlalchemy import select
+
+    from tests.conftest import TestingSessionLocal
+
+    db = TestingSessionLocal()
+    not_lider = db.execute(
+        select(User.id).where(User.email == "viewer@alpha.gov")
+    ).scalar_one()
+    db.close()
+    h = auth_headers(client, "admin@alpha.gov")
+    resp = client.post(
+        "/api/users",
+        json={
+            "email": "x@alpha.gov",
+            "full_name": "X",
+            "role": "activista",
+            "lider_id": not_lider,
+        },
+        headers=h,
+    )
+    assert resp.status_code == 400, resp.text
