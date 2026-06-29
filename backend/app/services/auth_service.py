@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -11,10 +11,13 @@ from app.models.user import User
 from app.schemas.auth import Token
 
 
-def authenticate_user(db: Session, email: str, password: str) -> User | None:
-    """Return the user if credentials are valid and the account is usable."""
+def authenticate_user(db: Session, identifier: str, password: str) -> User | None:
+    """Return the user if credentials are valid. ``identifier`` is email or phone."""
     user = db.execute(
-        select(User).where(User.email == email, User.deleted_at.is_(None))
+        select(User).where(
+            or_(User.email == identifier, User.phone == identifier),
+            User.deleted_at.is_(None),
+        )
     ).scalar_one_or_none()
     if user is None or not user.is_active:
         return None

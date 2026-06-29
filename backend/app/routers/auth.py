@@ -14,11 +14,11 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/login", response_model=Token, summary="Authenticate and issue token")
 def login(payload: LoginRequest, db: DbSession, request: Request) -> Token:
     """Authenticate a user and return a JWT (with org + role claims)."""
-    user = auth_service.authenticate_user(db, payload.email, payload.password)
+    user = auth_service.authenticate_user(db, payload.identifier, payload.password)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
+            detail="Invalid credentials",
         )
     token = auth_service.issue_token(user)
 

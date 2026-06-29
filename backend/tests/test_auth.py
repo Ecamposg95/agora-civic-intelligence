@@ -44,3 +44,14 @@ def test_me_returns_current_user(client: TestClient) -> None:
 def test_me_requires_auth(client: TestClient) -> None:
     resp = client.get("/api/auth/me")
     assert resp.status_code == 401
+
+
+def test_login_by_phone(client: TestClient) -> None:
+    resp = client.post("/api/auth/login", json={"identifier": "5550000001", "password": PASSWORD})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["access_token"]
+
+
+def test_login_by_email_via_identifier(client: TestClient) -> None:
+    resp = client.post("/api/auth/login", json={"identifier": "admin@alpha.gov", "password": PASSWORD})
+    assert resp.status_code == 200, resp.text
