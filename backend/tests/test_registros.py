@@ -1,10 +1,29 @@
 """Tests for the activist capture core (User extensions, Registro model)."""
 from datetime import datetime, timezone
 
+from sqlalchemy import select
+
 from app.core import crypto
+from app.dependencies import CampaignContext
+from app.models.campaign import Campaign
 from app.models.registro import Registro
 from app.models.user import User, UserRole
 from tests.conftest import ALPHA_CAMPAIGN_ID, TestingSessionLocal
+
+
+def _camp_ctx(db, email, campaign_id):
+    user = db.execute(select(User).where(User.email == email)).scalar_one()
+    camp = db.execute(select(Campaign).where(Campaign.id == campaign_id)).scalar_one()
+    org = camp.organization_id if user.role.value == "superadmin" else user.organization_id
+    return CampaignContext(user=user, organization_id=org, role=user.role, campaign_id=campaign_id)
+
+
+def _make(db, ctx, nombre, **kw):
+    from app.services import registro_service
+    from app.schemas.registro import RegistroCreate
+    return registro_service.create_registro(
+        db, ctx, RegistroCreate(nombre_completo=nombre, consentimiento=True, **kw)
+    )
 
 
 def test_user_role_has_lider_and_activista():
@@ -40,6 +59,57 @@ def test_registro_stores_clave_encrypted_not_plain():
         assert reg.clave_masked == "****-XYZ8"
         assert b"ABCD1234567890XYZ8" not in bytes(reg.clave_elector_enc)
         assert crypto.decrypt_clave(bytes(reg.clave_elector_enc)) == "ABCD1234567890XYZ8"
+    finally:
+        db.query(Registro).delete()
+        db.commit()
+        db.close()
+
+
+def test_consent_required_raises():
+    from app.services import registro_service
+    from app.schemas.registro import RegistroCreate
+    import pytest
+    db = TestingSessionLocal()
+    try:
+        ctx = _camp_ctx(db, "activista1@alpha.gov", ALPHA_CAMPAIGN_ID)
+        data = RegistroCreate(nombre_completo="Sin Consent", consentimiento=False)
+        with pytest.raises(registro_service.ConsentRequired):
+            registro_service.create_registro(db, ctx, data)
+    finally:
+        db.query(Registro).delete()
+        db.commit()
+        db.close()
+
+
+def test_activista_sees_only_own_lider_sees_structure():
+    from app.services import registro_service
+    db = TestingSessionLocal()
+    try:
+        a1 = _camp_ctx(db, "activista1@alpha.gov", ALPHA_CAMPAIGN_ID)
+        a2 = _camp_ctx(db, "activista2@alpha.gov", ALPHA_CAMPAIGN_ID)
+        lider = _camp_ctx(db, "lider@alpha.gov", ALPHA_CAMPAIGN_ID)
+        _make(db, a1, "Persona A1")
+        _make(db, a2, "Persona A2")
+        own, total_own = registro_service.list_registros(db, a1, None, 50, 0)
+        assert {r.nombre_completo for r in own} == {"Persona A1"}
+        seen, total_l = registro_service.list_registros(db, lider, None, 50, 0)
+        assert {r.nombre_completo for r in seen} == {"Persona A1", "Persona A2"}
+    finally:
+        db.query(Registro).delete()
+        db.commit()
+        db.close()
+
+
+def test_idempotent_client_uuid():
+    from app.services import registro_service
+    db = TestingSessionLocal()
+    try:
+        a1 = _camp_ctx(db, "activista1@alpha.gov", ALPHA_CAMPAIGN_ID)
+        r1 = _make(db, a1, "Dup", client_uuid="cu-1")
+        r2 = _make(db, a1, "Dup", client_uuid="cu-1")
+        assert r1.id == r2.id
+        _, total = registro_service.list_registros(db, a1, None, 50, 0)
+        assert total == 1
     finally:
         db.query(Registro).delete()
         db.commit()
