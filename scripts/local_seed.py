@@ -29,6 +29,12 @@ DEMO_USERS = [
     ("sofia.admin@agora.gob.mx", "Sofía Admin", UserRole.ADMIN),
 ]
 
+# Activist leadership profiles seeded with their own (non-default) password.
+# (email, full_name, role, password)
+LEADERSHIP_USERS = [
+    ("lucy@atlastech.mx", "Lucy — Dirigente de Activismo", UserRole.LIDER, "78451289"),
+]
+
 
 def main() -> None:
     # Only the SQLite-safe tables (electoral_areas uses PostGIS geometry).
@@ -59,10 +65,26 @@ def main() -> None:
                         is_active=True,
                     )
                 )
+
+        for email, name, role, password in LEADERSHIP_USERS:
+            exists = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+            if exists is None:
+                db.add(
+                    User(
+                        email=email,
+                        full_name=name,
+                        role=role,
+                        organization_id=org.id,
+                        hashed_password=hash_password(password),
+                        must_change_password=False,
+                        is_active=True,
+                    )
+                )
         db.commit()
 
     print("✓ Seed complete")
     print(f"  Login: admin@agora.gob.mx / {DEMO_PASSWORD}  (rol admin)")
+    print("  Login: lucy@atlastech.mx / 78451289  (rol lider — dirigente de activismo)")
 
 
 if __name__ == "__main__":
