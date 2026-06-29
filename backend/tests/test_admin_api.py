@@ -98,3 +98,28 @@ def test_superadmin_consolidated_no_base(client):
     resp = client.get("/api/admin/registros", headers=auth_headers(client, "super@atlas.gov"))
     assert resp.status_code == 200, resp.text
     assert resp.json()["total"] >= 1
+
+
+# ---------------------------------------------------------------------------
+# 403 RBAC full coverage — all five admin endpoints
+# (registros + revelar-clave already covered above; adding metricas, estructura, auditoria)
+# viewer@alpha.gov is a campaign member (seeded) but has role=VIEWER → 403 from RBAC
+# lider@alpha.gov is a campaign member with role=LIDER → 403 on AdminOnly endpoints
+# ---------------------------------------------------------------------------
+
+def test_viewer_forbidden_on_metricas(client):
+    """VIEWER (campaign member) is not ADMIN/LIDER → metricas must return 403."""
+    resp = client.get("/api/admin/metricas", headers=_hdr(client, "viewer@alpha.gov", ALPHA_CAMPAIGN_ID))
+    assert resp.status_code == 403, f"Expected 403, got {resp.status_code}: {resp.text}"
+
+
+def test_viewer_forbidden_on_estructura(client):
+    """VIEWER (campaign member) is not ADMIN/LIDER → estructura must return 403."""
+    resp = client.get("/api/admin/estructura", headers=_hdr(client, "viewer@alpha.gov", ALPHA_CAMPAIGN_ID))
+    assert resp.status_code == 403, f"Expected 403, got {resp.status_code}: {resp.text}"
+
+
+def test_lider_forbidden_on_auditoria(client):
+    """LIDER is not ADMIN → auditoria (AdminOnly) must return 403."""
+    resp = client.get("/api/admin/auditoria", headers=_hdr(client, "lider@alpha.gov", ALPHA_CAMPAIGN_ID))
+    assert resp.status_code == 403, f"Expected 403, got {resp.status_code}: {resp.text}"

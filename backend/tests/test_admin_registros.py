@@ -74,3 +74,43 @@ def test_filter_by_seccion():
         assert total == 1 and rows[0]["seccion"] == "0001"
     finally:
         db.query(Registro).delete(); db.commit(); db.close()
+
+
+def test_alpha_admin_cannot_see_beta_registros():
+    """Negative tenant-isolation: ALPHA admin must not see BETA registros."""
+    from app.services import admin_service
+    db = TestingSessionLocal()
+    try:
+        alpha_ctx = _camp_ctx(db, "activista1@alpha.gov", ALPHA_CAMPAIGN_ID)
+        beta_ctx = _camp_ctx(db, "activista_beta@beta.gov", BETA_CAMPAIGN_ID)
+        admin = _camp_ctx(db, "admin@alpha.gov", ALPHA_CAMPAIGN_ID)
+        _make(db, alpha_ctx, "Alpha Person")
+        _make(db, beta_ctx, "Beta Person")
+        rows, total = admin_service.list_admin_registros(db, admin, q=None, lider_id=None,
+            activista_id=None, seccion=None, since=None, until=None, limit=50, offset=0)
+        assert total == 1, f"Expected 1 (only ALPHA), got {total}"
+        assert rows[0]["nombre_completo"] == "Alpha Person"
+        # Verify the BETA registro is absent
+        names = [r["nombre_completo"] for r in rows]
+        assert "Beta Person" not in names
+    finally:
+        db.query(Registro).delete(); db.commit(); db.close()
+
+
+def test_clave_masked_exposed_raw_enc_absent():
+    """Masking assertion: list returns clave_masked, never clave_elector_enc."""
+    from app.services import admin_service
+    db = TestingSessionLocal()
+    try:
+        a1 = _camp_ctx(db, "activista1@alpha.gov", ALPHA_CAMPAIGN_ID)
+        admin = _camp_ctx(db, "admin@alpha.gov", ALPHA_CAMPAIGN_ID)
+        _make(db, a1, "Masked Test Person", clave_elector="ABCD1234567890XYZ8")
+        rows, total = admin_service.list_admin_registros(db, admin, q=None, lider_id=None,
+            activista_id=None, seccion=None, since=None, until=None, limit=50, offset=0)
+        assert total == 1
+        row = rows[0]
+        assert "clave_elector_enc" not in row, "Raw encrypted bytes must not be in listing response"
+        assert row["clave_masked"] is not None, "clave_masked should be populated when clave was provided"
+        assert row["clave_masked"].startswith("****-"), f"Expected masked format, got: {row['clave_masked']}"
+    finally:
+        db.query(Registro).delete(); db.commit(); db.close()
