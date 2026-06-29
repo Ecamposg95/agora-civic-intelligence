@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, aliased
 from app.dependencies import CampaignContext
 from app.models.organization import Organization
 from app.models.registro import Registro
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.services.registro_service import _role_scoped
 
 
@@ -110,3 +110,139 @@ def list_admin_registros(
             "created_at": r.created_at,
         })
     return out, int(total)
+
+
+# ---------------------------------------------------------------------------
+# Metrics
+# ---------------------------------------------------------------------------
+
+def _por_lider(db: Session, reg, act):
+    """Bucket registros by lider, joining a second User alias for lider name."""
+    lid = aliased(User)
+    rows = db.execute(
+        select(act.lider_id, lid.full_name, func.count())
+        .select_from(reg)
+        .outerjoin(act, act.id == reg.activista_id)
+        .outerjoin(lid, lid.id == act.lider_id)
+        .group_by(act.lider_id, lid.full_name)
+        .order_by(func.count().desc())
+    ).all()
+    return [
+        {"label": lname or "Sin líder", "count": int(n)}
+        for _, lname, n in rows
+    ]
+
+
+def metrics(db: Session, ctx: CampaignContext) -> dict:
+    """Return aggregate metrics for the admin console.
+
+    Respects role/tenant scope identically to list_admin_registros.
+    Returns a dict compatible with MetricsRead schema:
+      total, by_seccion, by_activista, by_day.
+    """
+    base = _role_scoped(ctx).subquery()
+    reg = aliased(Registro, base)
+    act = aliased(User)
+
+    total = db.execute(
+        select(func.count()).select_from(reg)
+    ).scalar_one()
+
+    by_activista = [
+        {"label": name or rid or "—", "count": int(n)}
+        for rid, name, n in db.execute(
+            select(reg.activista_id, act.full_name, func.count())
+            .select_from(reg)
+            .outerjoin(act, act.id == reg.activista_id)
+            .group_by(reg.activista_id, act.full_name)
+            .order_by(func.count().desc())
+        ).all()
+    ]
+
+    by_seccion = [
+        {"label": s or "Sin sección", "count": int(n)}
+        for s, n in db.execute(
+            select(reg.seccion, func.count())
+            .select_from(reg)
+            .group_by(reg.seccion)
+            .order_by(func.count().desc())
+        ).all()
+    ]
+
+    by_day = [
+        {"date": str(d), "count": int(n)}
+        for d, n in db.execute(
+            select(func.date(reg.created_at), func.count())
+            .select_from(reg)
+            .group_by(func.date(reg.created_at))
+            .order_by(func.date(reg.created_at))
+        ).all()
+    ]
+
+    return {
+        "total": int(total),
+        "by_activista": by_activista,
+        "by_seccion": by_seccion,
+        "by_day": by_day,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Estructura (árbol líder → activistas)
+# ---------------------------------------------------------------------------
+
+def estructura(db: Session, ctx: CampaignContext) -> list[dict]:
+    """Return the organizational tree: each líder with their activistas and counts.
+
+    Counts come from role-scoped registros; the tree membership (which users
+    appear) is tenant-scoped by organization_id. For a LIDER context, only
+    their own subtree is returned.
+    """
+    # Count registros per activista within scope
+    base = _role_scoped(ctx).subquery()
+    reg = aliased(Registro, base)
+    counts: dict = dict(
+        db.execute(
+            select(reg.activista_id, func.count())
+            .select_from(reg)
+            .group_by(reg.activista_id)
+        ).all()
+    )
+
+    # Query lideres visible to this context
+    lideres_q = select(User).where(
+        User.role == UserRole.LIDER,
+        User.deleted_at.is_(None),
+    )
+    if ctx.organization_id is not None:
+        lideres_q = lideres_q.where(User.organization_id == ctx.organization_id)
+    if ctx.role == UserRole.LIDER and not ctx.is_superadmin:
+        lideres_q = lideres_q.where(User.id == ctx.user.id)
+    lideres = db.execute(lideres_q).scalars().all()
+
+    tree: list[dict] = []
+    for lider in lideres:
+        acts = db.execute(
+            select(User).where(
+                User.lider_id == lider.id,
+                User.deleted_at.is_(None),
+            )
+        ).scalars().all()
+        act_nodes = [
+            {
+                "id": a.id,
+                "full_name": a.full_name,
+                "email": a.email,
+                "seccion": a.seccion,
+                "count": int(counts.get(a.id, 0)),
+            }
+            for a in acts
+        ]
+        tree.append({
+            "id": lider.id,
+            "full_name": lider.full_name,
+            "email": lider.email,
+            "seccion": lider.seccion,
+            "activistas": act_nodes,
+        })
+    return tree
