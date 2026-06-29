@@ -26,6 +26,8 @@ class UserRole(str, enum.Enum):
     ADMIN = "admin"
     ANALYST = "analyst"
     VIEWER = "viewer"
+    LIDER = "lider"
+    ACTIVISTA = "activista"
 
 
 class User(UUIDMixin, AuditMixin, Base):
@@ -51,6 +53,12 @@ class User(UUIDMixin, AuditMixin, Base):
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
 
     phone: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    # Activist-structure hierarchy: an activist points to its leader; a leader
+    # has lider_id = NULL. Self-FK on users.
+    lider_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    seccion: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     # Forces a password change on next login (temp-password onboarding flow).
     must_change_password: Mapped[bool] = mapped_column(default=False, nullable=False)
 
