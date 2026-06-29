@@ -16,7 +16,42 @@ from app.dependencies import CampaignContext
 from app.models.organization import Organization
 from app.models.registro import Registro
 from app.models.user import User, UserRole
+from app.core import crypto
+from app.services import registro_service
+from app.services.audit_service import record_audit
 from app.services.registro_service import _role_scoped
+
+
+class NoClave(Exception):
+    """Raised when a registro has no stored clave de elector to reveal."""
+
+
+def reveal_clave(db: Session, ctx: CampaignContext, registro_id: str) -> Optional[str]:
+    """Decrypt the clave de elector. ALWAYS audits on successful reveal.
+
+    Admin/superadmin gate lives at the router layer.
+    Returns the plaintext, or None if the registro is out of scope (router → 404).
+    Raises NoClave (router → 422) when there is no ciphertext stored.
+    Decision: only successful reveals are audited; missed/out-of-scope lookups
+    are not audited (brief is silent; the get_registro access-control layer
+    is the correct enforcement point).
+    """
+    reg = registro_service.get_registro(db, ctx, registro_id)
+    if reg is None:
+        return None
+    if not reg.clave_elector_enc:
+        raise NoClave()
+    plain = crypto.decrypt_clave(bytes(reg.clave_elector_enc))
+    record_audit(
+        db,
+        action="registro.reveal_clave",
+        actor_id=ctx.user.id,
+        organization_id=reg.organization_id,
+        entity_type="registro",
+        entity_id=reg.id,
+    )
+    db.commit()
+    return plain
 
 
 def list_admin_registros(
