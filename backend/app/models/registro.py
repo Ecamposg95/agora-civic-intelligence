@@ -18,7 +18,10 @@ class Registro(UUIDMixin, TenantMixin, CampaignMixin, AuditMixin, Base):
     __table_args__ = (
         Index("ix_registros_campaign_activista", "campaign_id", "activista_id"),
         Index("ix_registros_campaign_seccion", "campaign_id", "seccion"),
-        UniqueConstraint("campaign_id", "client_uuid", name="uq_registros_campaign_client_uuid"),
+        UniqueConstraint(
+            "campaign_id", "activista_id", "client_uuid",
+            name="uq_registros_campaign_activista_client_uuid",
+        ),
     )
 
     activista_id: Mapped[Optional[str]] = mapped_column(

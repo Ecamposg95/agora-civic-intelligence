@@ -72,3 +72,27 @@ def test_viewer_cannot_read_or_write_registros(client):
         json={"nombre_completo": "Blocked Viewer", "consentimiento": True},
         headers=h,
     ).status_code == 403
+
+
+def test_two_activistas_same_campaign_same_client_uuid_coexist(client):
+    # Mismo client_uuid, distinta activista, misma campaña → ambos deben crearse.
+    h1 = _hdr(client, "activista1@alpha.gov", ALPHA_CAMPAIGN_ID)
+    h2 = _hdr(client, "activista2@alpha.gov", ALPHA_CAMPAIGN_ID)
+    p = {"nombre_completo": "Colisión UUID", "consentimiento": True, "client_uuid": "shared-uuid-1"}
+    r1 = client.post("/api/registros", json=p, headers=h1)
+    r2 = client.post("/api/registros", json=p, headers=h2)
+    assert r1.status_code == 201 and r2.status_code == 201, (r1.text, r2.text)
+    assert r1.json()["id"] != r2.json()["id"]
+    client.delete(f"/api/registros/{r1.json()['id']}", headers=h1)
+    client.delete(f"/api/registros/{r2.json()['id']}", headers=h2)
+
+
+def test_same_activista_same_client_uuid_idempotent(client):
+    # No-regresión: el mismo activista reenviando el mismo client_uuid no duplica.
+    h = _hdr(client, "activista1@alpha.gov", ALPHA_CAMPAIGN_ID)
+    p = {"nombre_completo": "Idem", "consentimiento": True, "client_uuid": "idem-uuid-1"}
+    a = client.post("/api/registros", json=p, headers=h)
+    b = client.post("/api/registros", json=p, headers=h)
+    assert a.status_code == 201 and b.status_code == 201
+    assert a.json()["id"] == b.json()["id"]
+    client.delete(f"/api/registros/{a.json()['id']}", headers=h)
