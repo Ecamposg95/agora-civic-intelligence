@@ -191,7 +191,7 @@ export const MODULES: ModuleDef[] = [
 
   // Inteligencia Electoral
   { key: "resultados", path: "/resultados", label: "Resultados Electorales", section: "inteligencia", icon: AnalyticsIcon, state: "preview", element: Resultados, roles: INTEL },
-  { key: "padron", path: "/padron", label: "Padrón / Lista Nominal", section: "inteligencia", icon: VotersIcon, state: "preview", element: Padron, roles: INTEL },
+  { key: "padron", path: "/padron", label: "Padrón / Lista Nominal", section: "inteligencia", icon: VotersIcon, state: "preview", element: Padron, roles: ["superadmin", "admin", "analyst"] },
   {
     key: "candidaturas", path: "/candidaturas", label: "Candidaturas", section: "inteligencia", icon: UserIcon, state: "soon", roles: INTEL,
     soon: {

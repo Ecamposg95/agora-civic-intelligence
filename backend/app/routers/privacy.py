@@ -18,10 +18,10 @@ from app.services import privacy_service
 
 router = APIRouter(prefix="/privacy", tags=["privacy"])
 
-# Capture-role gate: ACTIVISTA, LIDER, and ADMIN (superadmin auto-passes).
+# Capture-role gate: CAPTURISTA, ACTIVISTA, LIDER, and ADMIN (superadmin auto-passes).
 CaptureCtx = Annotated[
     TenantContext,
-    Depends(require_roles(UserRole.ACTIVISTA, UserRole.LIDER, UserRole.ADMIN)),
+    Depends(require_roles(UserRole.CAPTURISTA, UserRole.ACTIVISTA, UserRole.LIDER, UserRole.ADMIN)),
 ]
 
 # Admin-only gate for notice management.
