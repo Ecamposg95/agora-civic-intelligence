@@ -23,7 +23,10 @@ import type { User, UserRole } from "@/types/auth";
 import type { UserCreatePayload, UserUpdatePayload } from "@/types/users";
 
 const PAGE_SIZE = 20;
-const ALL_ROLES: UserRole[] = ["superadmin", "admin", "analyst", "viewer"];
+const ALL_ROLES: UserRole[] = [
+  "superadmin", "admin", "coordinador", "lider",
+  "activista", "capturista", "analyst", "viewer", "consulta",
+];
 
 // Columns defined at module scope — render fns only reference module-level
 // constants (ROLE_BADGE, TONE_BADGE), so no closure over props/state.

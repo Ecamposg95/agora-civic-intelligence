@@ -42,10 +42,15 @@ export const KIND_BADGE: Record<string, Tone> = {
 
 /** User role → badge tone (dedupe Users). */
 export const ROLE_BADGE: Record<string, Tone> = {
-  superadmin: "critical",
-  admin: "info",
-  analyst: "ok",
-  viewer: "neutral",
+  superadmin: "critical",  // red — highest privilege
+  admin: "info",           // blue — tenant admin
+  coordinador: "warning",  // amber — mid-level coordinator
+  lider: "ok",             // teal — field leader
+  activista: "ok",         // teal — field activist
+  capturista: "warning",   // amber — data-entry agent
+  analyst: "info",         // blue — read + analysis
+  viewer: "neutral",       // grey — read-only
+  consulta: "neutral",     // grey — read-only
 };
 
 /** Responsive panel heights — replaces hardcoded h-[600px]/h-[440px]. */

@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ComingSoonPage } from "@/components/modules/ComingSoonPage";
 import { MODULES } from "@/modules/registry";
 import { useAuthStore } from "@/store/authStore";
+import type { UserRole } from "@/types/auth";
 
 // Route-level code splitting: heavy deps (MapLibre, Recharts) load only on the
 // routes that need them, keeping the initial bundle small.
@@ -43,6 +44,17 @@ function RequireSession({ children }: { children: JSX.Element }) {
   return isAuthenticated ? children : <Navigate to="/login" replace />;
 }
 
+/** Role guard — must sit inside RequireAuth so user is already populated. */
+function RequireRole({ roles, children }: { roles?: UserRole[]; children: JSX.Element }) {
+  const user = useAuthStore((s) => s.user);
+  // No role restriction on this module — any authenticated user may proceed.
+  if (!roles) return children;
+  // User profile not yet loaded — hold until RequireAuth's effect populates it.
+  if (!user) return null;
+  if (!roles.includes(user.role)) return <Navigate to="/" replace />;
+  return children;
+}
+
 function RouteFallback() {
   return (
     <div className="grid h-screen place-items-center bg-bg text-ink-faint">
@@ -73,7 +85,11 @@ export default function App() {
               <Route
                 key={m.key}
                 path={m.path}
-                element={<RequireAuth>{node}</RequireAuth>}
+                element={
+                  <RequireAuth>
+                    <RequireRole roles={m.roles}>{node}</RequireRole>
+                  </RequireAuth>
+                }
               />
             );
           })}
