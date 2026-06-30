@@ -18,8 +18,8 @@ def test_overview_returns_real_tenant_scoped_metrics(client):
     summary = body["summary"]
     # Non-superadmin sees exactly their own organization.
     assert summary["organizations"] == 1
-    # Alpha tenant seeded with 8 active users (admin, viewer, lider, activista1, activista2, coord, capturista, consulta).
-    assert summary["users"] == 8
+    # Alpha tenant seeded with 9 active users (admin, viewer, lider, activista1, activista2, coord, capturista, consulta, analyst).
+    assert summary["users"] == 9
     # Data sources come from the INE source registry (non-empty).
     assert summary["data_sources"] >= 1
     assert summary["electoral_areas"] >= 0

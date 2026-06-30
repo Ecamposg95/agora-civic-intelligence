@@ -594,3 +594,238 @@ class TestRbacIsolationFlow:
 
         finally:
             _cleanup_registros_and_arco()
+
+
+# ---------------------------------------------------------------------------
+# Flow 6: RBAC matrix — end-to-end 200/403 per role + cardinality + isolation
+# ---------------------------------------------------------------------------
+
+
+class TestRbacMatrixFlow:
+    """End-to-end RBAC matrix: per-role HTTP 200/403 assertions, coordinator
+    data cardinality, and cross-scope isolation.
+
+    Roles covered: COORDINADOR, CAPTURISTA, CONSULTA, ANALYST, VIEWER.
+    Superadmin consolidated view is exercised in Flow 5.
+    """
+
+    # -- COORDINADOR -----------------------------------------------------------
+
+    def test_coordinador_console_and_intel_access(self, client):
+        """COORDINADOR reads admin console + intelligence; blocked from capture/reveal."""
+        h = _hdr(client, "coord@alpha.gov")
+        ih = auth_headers(client, "coord@alpha.gov")
+
+        # Admin console: 200
+        assert client.get("/api/admin/registros", headers=h).status_code == 200
+        assert client.get("/api/admin/metricas", headers=h).status_code == 200
+
+        # Capture: 403
+        assert client.post(
+            "/api/registros",
+            json={"nombre_completo": "Coord Capture Attempt", "consentimiento": True},
+            headers=h,
+        ).status_code == 403
+
+        # Reveal clave: 403 (permission guard fires before resource lookup)
+        assert client.post(
+            "/api/admin/registros/00000000-0000-0000-0000-000000000000/revelar-clave",
+            headers=h,
+        ).status_code == 403
+
+        # Intelligence: 200
+        assert client.get("/api/intel/ieem/datasets", headers=ih).status_code == 200
+        assert client.get("/api/analytics/overview", headers=ih).status_code == 200
+
+        # Reports: 200
+        assert client.get("/api/reports/secciones", headers=h).status_code == 200
+
+    def test_coordinador_data_cardinality_and_cross_scope_isolation(self, client):
+        """COORDINADOR sees only its substructure; capturista's and beta's rows hidden."""
+        try:
+            act1_h = _hdr(client, "activista1@alpha.gov")
+            act2_h = _hdr(client, "activista2@alpha.gov")
+            cap_h = _hdr(client, "capturista@alpha.gov")
+            beta_h = _hdr(client, "activista_beta@beta.gov", BETA_CAMPAIGN_ID)
+            coord_h = _hdr(client, "coord@alpha.gov")
+
+            # activista1 (under lider -> under coord) captures
+            r1 = client.post(
+                "/api/registros",
+                json={"nombre_completo": "Cardinality Activista1", "consentimiento": True},
+                headers=act1_h,
+            )
+            assert r1.status_code == 201, r1.text
+            rid1 = r1.json()["id"]
+
+            # activista2 (same lider -> same coord) captures
+            r2 = client.post(
+                "/api/registros",
+                json={"nombre_completo": "Cardinality Activista2", "consentimiento": True},
+                headers=act2_h,
+            )
+            assert r2.status_code == 201, r2.text
+            rid2 = r2.json()["id"]
+
+            # capturista (alpha org, no lider/coordinator chain) captures
+            rc = client.post(
+                "/api/registros",
+                json={"nombre_completo": "Cardinality Capturista", "consentimiento": True},
+                headers=cap_h,
+            )
+            assert rc.status_code == 201, rc.text
+            rid_cap = rc.json()["id"]
+
+            # beta activista captures (different org/campaign)
+            rb = client.post(
+                "/api/registros",
+                json={"nombre_completo": "Cardinality Beta", "consentimiento": True},
+                headers=beta_h,
+            )
+            assert rb.status_code == 201, rb.text
+            rid_beta = rb.json()["id"]
+
+            # coord@ lists its admin view
+            resp = client.get("/api/admin/registros", headers=coord_h)
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            ids_seen = {r["id"] for r in body["items"]}
+
+            # T3 cardinality: exactly the two activistas in coord's hierarchy
+            assert body["total"] == 2, (
+                f"coord@ must see exactly 2 registros (its substructure), got {body['total']}"
+            )
+            assert rid1 in ids_seen, "activista1 registro must be visible to coord"
+            assert rid2 in ids_seen, "activista2 registro must be visible to coord"
+
+            # Cross-scope isolation: capturista (not in hierarchy) is hidden
+            assert rid_cap not in ids_seen, (
+                "coord@ must NOT see capturista@'s registro (outside its hierarchy)"
+            )
+
+            # Cross-tenant isolation: beta is hidden
+            assert rid_beta not in ids_seen, (
+                "coord@ must NOT see beta tenant's registro"
+            )
+
+        finally:
+            _cleanup_registros_and_arco()
+
+    # -- CAPTURISTA ------------------------------------------------------------
+
+    def test_capturista_capture_and_mios_only(self, client):
+        """CAPTURISTA captures, sees only own list; blocked from console and intel."""
+        try:
+            h = _hdr(client, "capturista@alpha.gov")
+            ih = auth_headers(client, "capturista@alpha.gov")
+
+            # Capture: 201
+            r = client.post(
+                "/api/registros",
+                json={"nombre_completo": "Cap Matrix", "consentimiento": True},
+                headers=h,
+            )
+            assert r.status_code == 201, r.text
+            rid = r.json()["id"]
+
+            # Own list: registro appears
+            mios = client.get("/api/registros/mios", headers=h)
+            assert mios.status_code == 200, mios.text
+            assert rid in [x["id"] for x in mios.json()["items"]]
+
+            # Admin console: 403
+            assert client.get("/api/admin/registros", headers=h).status_code == 403
+            assert client.get("/api/admin/metricas", headers=h).status_code == 403
+
+            # Intelligence: 403
+            assert client.get("/api/intel/ieem/datasets", headers=ih).status_code == 403
+            assert client.get("/api/analytics/overview", headers=ih).status_code == 403
+
+        finally:
+            _cleanup_registros_and_arco()
+
+    # -- CONSULTA --------------------------------------------------------------
+
+    def test_consulta_reports_only(self, client):
+        """CONSULTA: 403 on capture/admin/intel; 200 on reports."""
+        h = _hdr(client, "consulta@alpha.gov")
+        ih = auth_headers(client, "consulta@alpha.gov")
+
+        # Capture: 403
+        assert client.post(
+            "/api/registros",
+            json={"nombre_completo": "Consulta Attempt", "consentimiento": True},
+            headers=h,
+        ).status_code == 403
+
+        # Admin console: 403
+        assert client.get("/api/admin/registros", headers=h).status_code == 403
+        assert client.get("/api/admin/metricas", headers=h).status_code == 403
+
+        # Intelligence: 403
+        assert client.get("/api/intel/ieem/datasets", headers=ih).status_code == 403
+        assert client.get("/api/analytics/overview", headers=ih).status_code == 403
+
+        # Reports: 200
+        assert client.get("/api/reports/secciones", headers=h).status_code == 200
+
+    # -- ANALYST ---------------------------------------------------------------
+
+    def test_analyst_intel_sources_reports_allowed(self, client):
+        """ANALYST: 200 on intel/sources/reports; 403 on capture/admin/reveal."""
+        h = _hdr(client, "analyst@alpha.gov")
+        ih = auth_headers(client, "analyst@alpha.gov")
+
+        # Intelligence: 200
+        assert client.get("/api/intel/ieem/datasets", headers=ih).status_code == 200
+        assert client.get("/api/analytics/overview", headers=ih).status_code == 200
+
+        # Sources (admin+analyst only): 200
+        assert client.get("/api/sources", headers=ih).status_code == 200
+
+        # Reports: 200
+        assert client.get("/api/reports/secciones", headers=h).status_code == 200
+
+        # Capture: 403
+        assert client.post(
+            "/api/registros",
+            json={"nombre_completo": "Analyst Attempt", "consentimiento": True},
+            headers=h,
+        ).status_code == 403
+
+        # Admin console: 403
+        assert client.get("/api/admin/registros", headers=h).status_code == 403
+
+        # Reveal clave: 403 (permission guard fires before resource lookup)
+        assert client.post(
+            "/api/admin/registros/00000000-0000-0000-0000-000000000000/revelar-clave",
+            headers=h,
+        ).status_code == 403
+
+    # -- VIEWER ----------------------------------------------------------------
+
+    def test_viewer_intel_and_reports_allowed_sources_blocked(self, client):
+        """VIEWER: 200 on intel/reports; 403 on capture/admin/sources."""
+        h = _hdr(client, "viewer@alpha.gov")
+        ih = auth_headers(client, "viewer@alpha.gov")
+
+        # Intelligence: 200
+        assert client.get("/api/intel/ieem/datasets", headers=ih).status_code == 200
+        assert client.get("/api/analytics/overview", headers=ih).status_code == 200
+
+        # Sources (admin+analyst only): 403
+        assert client.get("/api/sources", headers=ih).status_code == 403
+
+        # Reports: 200
+        assert client.get("/api/reports/secciones", headers=h).status_code == 200
+
+        # Capture: 403
+        assert client.post(
+            "/api/registros",
+            json={"nombre_completo": "Viewer Attempt", "consentimiento": True},
+            headers=h,
+        ).status_code == 403
+
+        # Admin console: 403
+        assert client.get("/api/admin/registros", headers=h).status_code == 403
+        assert client.get("/api/admin/metricas", headers=h).status_code == 403

@@ -163,6 +163,9 @@ def seed_data():
             User(email="consulta@alpha.gov", full_name="Alpha Consulta",
                  hashed_password=hash_password(PASSWORD), role=UserRole.CONSULTA,
                  organization_id=org_a.id),
+            User(email="analyst@alpha.gov", full_name="Alpha Analyst",
+                 hashed_password=hash_password(PASSWORD), role=UserRole.ANALYST,
+                 organization_id=org_a.id),
         ])
         db.commit()
 
@@ -184,7 +187,7 @@ def seed_data():
         for email in (
             "lider@alpha.gov", "activista1@alpha.gov", "activista2@alpha.gov",
             "viewer@alpha.gov", "coord@alpha.gov", "capturista@alpha.gov",
-            "consulta@alpha.gov",
+            "consulta@alpha.gov", "analyst@alpha.gov",
         ):
             u = db.execute(select(User).where(User.email == email)).scalar_one()
             db.add(CampaignMembership(user_id=u.id, campaign_id=camp.id, role=u.role))

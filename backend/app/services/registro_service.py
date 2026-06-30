@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import sqlalchemy as sa
-from sqlalchemy import false, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core import crypto

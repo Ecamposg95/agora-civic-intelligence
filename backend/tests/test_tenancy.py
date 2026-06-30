@@ -23,6 +23,7 @@ def test_users_list_is_tenant_scoped(client: TestClient) -> None:
         "admin@alpha.gov", "viewer@alpha.gov",
         "lider@alpha.gov", "activista1@alpha.gov", "activista2@alpha.gov",
         "coord@alpha.gov", "capturista@alpha.gov", "consulta@alpha.gov",
+        "analyst@alpha.gov",
     }
     assert "admin@beta.gov" not in emails
     # Every returned record is scoped to the caller's organization.
@@ -48,7 +49,7 @@ def test_pagination_response_shape(client: TestClient) -> None:
     assert set(body.keys()) >= {"items", "total", "limit", "offset"}
     assert body["limit"] == 1
     assert body["offset"] == 0
-    assert body["total"] == 8  # eight Alpha users (admin, viewer, lider, activista1, activista2, coord, capturista, consulta)
+    assert body["total"] == 9  # nine Alpha users (admin, viewer, lider, activista1, activista2, coord, capturista, consulta, analyst)
     assert len(body["items"]) == 1  # limited to one
 
 
