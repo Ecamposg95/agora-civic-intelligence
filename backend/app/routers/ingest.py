@@ -20,19 +20,24 @@ MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 # Role gate — enforces ADMIN; runs alongside CampaignCtx on upload endpoints.
 AdminCampaignCtx = Annotated[object, Depends(require_roles(UserRole.ADMIN))]
 
+# Read gate — ingest provenance is data-governance data: ADMIN + ANALYST only
+# (mirrors the sibling `sources` router). Superadmins auto-pass. Without this,
+# any authenticated org user could enumerate datasets and run history.
+IngestReadCtx = Annotated[object, Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST))]
+
 
 @router.get("/datasets", response_model=list[str])
-def datasets(ctx: Tenant):
+def datasets(ctx: Tenant, _perm: IngestReadCtx):
     return sorted(DATASETS.keys())
 
 
 @router.get("/runs", response_model=list[IngestRunOut])
-def runs(db: DbSession, ctx: Tenant):
+def runs(db: DbSession, ctx: Tenant, _perm: IngestReadCtx):
     return svc.list_runs(db, ctx)
 
 
 @router.get("/runs/{run_id}", response_model=IngestRunOut)
-def run_detail(run_id: str, db: DbSession, ctx: Tenant):
+def run_detail(run_id: str, db: DbSession, ctx: Tenant, _perm: IngestReadCtx):
     run = svc.get_run(db, ctx, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")

@@ -34,5 +34,7 @@ def list_contests(campaign_id: str, db: DbSession, cctx: CampaignCtx):
 
 
 @router.post("/{campaign_id}/contests", response_model=ContestOut, status_code=201)
-def create_contest(campaign_id: str, data: ContestCreate, db: DbSession, cctx: CampaignCtx):
+def create_contest(campaign_id: str, data: ContestCreate, db: DbSession, cctx: CampaignCtx, _admin: AdminCtx):
+    # Creating a contest is a structural write — ADMIN-gated, like creating a
+    # campaign. Campaign membership alone (CampaignCtx) is not enough.
     return svc.create_contest(db, cctx, data)
