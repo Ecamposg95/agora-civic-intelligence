@@ -101,10 +101,12 @@ export function CapturaPage() {
 
   const claveLen = form.clave_elector.replace(/\s/g, "").length;
   const claveWarn = claveLen > 0 && claveLen !== 18;
+  const edadWarn = form.edad.trim() !== "" && Number(form.edad) > 120;
   const canSave =
     form.nombre_completo.trim().length > 1 &&
     form.consentimiento &&
     !claveWarn &&
+    !edadWarn &&
     !submitting;
 
   const handleSubmit = useCallback(async () => {
@@ -395,7 +397,7 @@ export function CapturaPage() {
                 id="cap-edad"
                 type="text"
                 inputMode="numeric"
-                className="field-input"
+                className={`field-input ${edadWarn ? "border-state-warning focus:border-state-warning focus:ring-state-warning/30" : ""}`}
                 placeholder="Años"
                 value={form.edad}
                 onChange={(e) =>
@@ -405,6 +407,11 @@ export function CapturaPage() {
                   }))
                 }
               />
+              {edadWarn && (
+                <p className="mt-1 text-xs text-state-warning">
+                  Edad máxima 120
+                </p>
+              )}
             </div>
 
             {/* Sección */}
@@ -646,9 +653,13 @@ function PersonRow({ registro, index, showActivista, onDelete }: PersonRowProps)
             </span>
           )}
           {registro.seccion && <span>Secc. {registro.seccion}</span>}
+          {registro.sexo && <span>{registro.sexo === "M" ? "M" : "F"}</span>}
+          {registro.edad != null && <span>{registro.edad} años</span>}
           {registro.telefono && <span>{registro.telefono}</span>}
           {registro.colonia && <span>{registro.colonia}</span>}
-          {registro.area && <span>{registro.area}</span>}
+          {(registro.estructura ?? registro.area) && (
+            <span>{registro.estructura ?? registro.area}</span>
+          )}
           {registro.clave_masked && <span>{registro.clave_masked}</span>}
         </div>
       </div>
