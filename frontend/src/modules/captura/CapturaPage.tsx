@@ -350,25 +350,6 @@ export function CapturaPage() {
               </div>
             </div>
 
-            {/* Edad */}
-            <div>
-              <label htmlFor="cap-edad" className="field-label">Edad</label>
-              <input
-                id="cap-edad"
-                type="text"
-                inputMode="numeric"
-                className="field-input"
-                placeholder="Años"
-                value={form.edad}
-                onChange={(e) =>
-                  setForm((p) => ({
-                    ...p,
-                    edad: e.target.value.replace(/\D/g, "").slice(0, 3),
-                  }))
-                }
-              />
-            </div>
-
             {/* Clave de elector */}
             <div className="sm:col-span-2">
               <label htmlFor="cap-clave" className="field-label">
@@ -398,6 +379,25 @@ export function CapturaPage() {
               )}
             </div>
 
+            {/* Edad */}
+            <div>
+              <label htmlFor="cap-edad" className="field-label">Edad</label>
+              <input
+                id="cap-edad"
+                type="text"
+                inputMode="numeric"
+                className="field-input"
+                placeholder="Años"
+                value={form.edad}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    edad: e.target.value.replace(/\D/g, "").slice(0, 3),
+                  }))
+                }
+              />
+            </div>
+
             {/* Sección */}
             <div>
               <label htmlFor="cap-seccion" className="field-label">
@@ -412,24 +412,6 @@ export function CapturaPage() {
                 value={form.seccion}
                 onChange={(e) =>
                   setForm((p) => ({ ...p, seccion: e.target.value }))
-                }
-              />
-            </div>
-
-            {/* Teléfono */}
-            <div>
-              <label htmlFor="cap-telefono" className="field-label">
-                Teléfono
-              </label>
-              <input
-                id="cap-telefono"
-                type="text"
-                inputMode="tel"
-                className="field-input"
-                placeholder="10 dígitos"
-                value={form.telefono}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, telefono: e.target.value }))
                 }
               />
             </div>
@@ -464,6 +446,24 @@ export function CapturaPage() {
                 value={form.colonia}
                 onChange={(e) =>
                   setForm((p) => ({ ...p, colonia: e.target.value }))
+                }
+              />
+            </div>
+
+            {/* Teléfono */}
+            <div>
+              <label htmlFor="cap-telefono" className="field-label">
+                Teléfono
+              </label>
+              <input
+                id="cap-telefono"
+                type="text"
+                inputMode="tel"
+                className="field-input"
+                placeholder="10 dígitos"
+                value={form.telefono}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, telefono: e.target.value }))
                 }
               />
             </div>
