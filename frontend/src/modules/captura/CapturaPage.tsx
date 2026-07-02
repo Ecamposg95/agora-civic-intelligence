@@ -27,7 +27,10 @@ interface FormState {
   direccion: string;
   colonia: string;
   telefono: string;
-  area: string;
+  sexo: string;      // "" | "M" | "F"
+  edad: string;      // string en el input, se castea al enviar
+  estructura: string;
+  observacion: string;
   clave_elector: string;
   consentimiento: boolean;
 }
@@ -38,7 +41,10 @@ const EMPTY_FORM: FormState = {
   direccion: "",
   colonia: "",
   telefono: "",
-  area: "",
+  sexo: "",
+  edad: "",
+  estructura: "",
+  observacion: "",
   clave_elector: "",
   consentimiento: false,
 };
@@ -62,7 +68,7 @@ export function CapturaPage() {
   const { refresh: refreshPending, triggerSync } = usePendingSyncStore();
 
   const perfilState = useAsync(getPerfil, []);
-  const registrosState = useAsync(listMisRegistros, []);
+  const registrosState = useAsync(() => listMisRegistros("team"), []);
 
   const { reload: reloadRegistros } = registrosState;
 
@@ -105,7 +111,10 @@ export function CapturaPage() {
       ...(form.direccion.trim() && { direccion: form.direccion.trim() }),
       ...(form.colonia.trim() && { colonia: form.colonia.trim() }),
       ...(form.telefono.trim() && { telefono: form.telefono.trim() }),
-      ...(form.area.trim() && { area: form.area.trim() }),
+      ...(form.sexo && { sexo: form.sexo }),
+      ...(form.edad.trim() && { edad: Number(form.edad) }),
+      ...(form.estructura.trim() && { estructura: form.estructura.trim() }),
+      ...(form.observacion.trim() && { observacion: form.observacion.trim() }),
       ...(form.clave_elector.replace(/\s+/g, "") && {
         clave_elector: form.clave_elector.replace(/\s+/g, ""),
       }),
@@ -318,6 +327,77 @@ export function CapturaPage() {
               />
             </div>
 
+            {/* Sexo */}
+            <div>
+              <span className="field-label">Sexo</span>
+              <div className="mt-1 flex gap-2">
+                {(["M", "F"] as const).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() =>
+                      setForm((p) => ({ ...p, sexo: p.sexo === s ? "" : s }))
+                    }
+                    className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${
+                      form.sexo === s
+                        ? "border-accent bg-accent/10 text-accent"
+                        : "border-line text-ink-muted hover:border-accent/40"
+                    }`}
+                  >
+                    {s === "M" ? "Masculino" : "Femenino"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Edad */}
+            <div>
+              <label htmlFor="cap-edad" className="field-label">Edad</label>
+              <input
+                id="cap-edad"
+                type="text"
+                inputMode="numeric"
+                className="field-input"
+                placeholder="Años"
+                value={form.edad}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    edad: e.target.value.replace(/\D/g, "").slice(0, 3),
+                  }))
+                }
+              />
+            </div>
+
+            {/* Clave de elector */}
+            <div className="sm:col-span-2">
+              <label htmlFor="cap-clave" className="field-label">
+                Clave de elector
+              </label>
+              <input
+                id="cap-clave"
+                type="text"
+                className={`field-input ${claveWarn ? "border-state-warning focus:border-state-warning focus:ring-state-warning/30" : ""}`}
+                placeholder="18 caracteres (mayúsculas)"
+                value={form.clave_elector}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    clave_elector: e.target.value.toUpperCase().replace(/\s/g, ""),
+                  }))
+                }
+              />
+              {claveWarn ? (
+                <p className="mt-1 text-xs text-state-warning">
+                  Lleva 18 caracteres ({claveLen} capturados)
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-ink-faint">
+                  Opcional · como aparece en la credencial
+                </p>
+              )}
+            </div>
+
             {/* Sección */}
             <div>
               <label htmlFor="cap-seccion" className="field-label">
@@ -388,50 +468,34 @@ export function CapturaPage() {
               />
             </div>
 
-            {/* Área / Programa */}
+            {/* Estructura */}
             <div>
-              <label htmlFor="cap-area" className="field-label">
-                Área / Programa
-              </label>
+              <label htmlFor="cap-estructura" className="field-label">Estructura</label>
               <input
-                id="cap-area"
+                id="cap-estructura"
                 type="text"
                 className="field-input"
-                placeholder="Ej. Salud, Educación"
-                value={form.area}
+                placeholder="Red o estructura"
+                value={form.estructura}
                 onChange={(e) =>
-                  setForm((p) => ({ ...p, area: e.target.value }))
+                  setForm((p) => ({ ...p, estructura: e.target.value }))
                 }
               />
             </div>
 
-            {/* Clave de elector */}
+            {/* Observación */}
             <div className="sm:col-span-2">
-              <label htmlFor="cap-clave" className="field-label">
-                Clave de elector
-              </label>
-              <input
-                id="cap-clave"
-                type="text"
-                className={`field-input ${claveWarn ? "border-state-warning focus:border-state-warning focus:ring-state-warning/30" : ""}`}
-                placeholder="18 caracteres (mayúsculas)"
-                value={form.clave_elector}
+              <label htmlFor="cap-observacion" className="field-label">Observación</label>
+              <textarea
+                id="cap-observacion"
+                rows={2}
+                className="field-input resize-y"
+                placeholder="Notas u observaciones"
+                value={form.observacion}
                 onChange={(e) =>
-                  setForm((p) => ({
-                    ...p,
-                    clave_elector: e.target.value.toUpperCase().replace(/\s/g, ""),
-                  }))
+                  setForm((p) => ({ ...p, observacion: e.target.value }))
                 }
               />
-              {claveWarn ? (
-                <p className="mt-1 text-xs text-state-warning">
-                  Lleva 18 caracteres ({claveLen} capturados)
-                </p>
-              ) : (
-                <p className="mt-1 text-xs text-ink-faint">
-                  Opcional · como aparece en la credencial
-                </p>
-              )}
             </div>
           </div>
 
