@@ -139,10 +139,12 @@ def import_rows(db: Session, *, organization_id: str, campaign_id: str, path: st
             client_uuid=cuid,
         ))
         importadas += 1
+    file_ref = hashlib.sha1(os.path.basename(path).encode("utf-8")).hexdigest()[:16]
     record_audit(
         db, action="registro.import", actor_id=None,
         organization_id=organization_id, entity_type="registro_batch",
-        entity_id=os.path.basename(path),
+        entity_id=file_ref,
+        meta={"leidas": leidas, "importadas": importadas, "duplicadas": duplicadas},
     )
     db.commit()
     return {"leidas": leidas, "importadas": importadas, "duplicadas": duplicadas}

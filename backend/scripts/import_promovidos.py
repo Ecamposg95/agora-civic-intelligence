@@ -32,16 +32,16 @@ def main() -> int:
         org_id = camp.organization_id
         files = sorted(glob.glob(os.path.join(args.dir, "*.xlsx")))
         total = {"leidas": 0, "importadas": 0, "duplicadas": 0}
-        for f in files:
+        for i, f in enumerate(files, 1):
             if args.dry_run:
                 rows = import_service.parse_workbook(f)
-                print(f"{os.path.basename(f)}: {len(rows)} filas (dry-run)")
+                print(f"[{i}/{len(files)}] {len(rows)} filas (dry-run)")
                 continue
             res = import_service.import_rows(
                 db, organization_id=org_id, campaign_id=args.campaign, path=f)
             for k in total:
                 total[k] += res[k]
-            print(f"{os.path.basename(f)}: {res}")
+            print(f"[{i}/{len(files)}] {res}")
         print(f"TOTAL: {total}")
         return 0
     finally:

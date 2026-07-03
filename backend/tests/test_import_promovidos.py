@@ -88,3 +88,38 @@ def test_import_rows_idempotent_and_audited(tmp_path):
         assert n_audit >= 1
     finally:
         db.close()
+
+
+def test_import_rows_audit_entity_id_is_not_pii(tmp_path):
+    """AuditLog.entity_id must be a non-PII, <=36-char hash — never the (PII,
+    length-unbounded) filename. Real filenames in docs/data/separados/ are
+    person names and can exceed the String(36) column, which crashes on
+    Postgres (StringDataRightTruncation) even though SQLite silently accepts
+    it. Counts belong in ``meta``, not the identifier."""
+    basename = "DAVID CESAR CORZA MONTES DE OCA LARGO NOMBRE_Mayus.xlsx"
+    assert len(basename) > 36
+    p = tmp_path / basename
+    _make_xlsx(str(p), header_row=1)
+    db = TestingSessionLocal()
+    try:
+        from app.models.user import User
+        org_id = db.execute(select(User.organization_id).where(
+            User.email == "coord@alpha.gov")).scalar_one()
+
+        res = import_service.import_rows(db, organization_id=org_id,
+                                          campaign_id=ALPHA_CAMPAIGN_ID, path=str(p))
+        assert res["importadas"] == 2
+
+        row = db.execute(
+            select(AuditLog).where(AuditLog.action == "registro.import")
+            .order_by(AuditLog.id.desc())
+        ).scalars().first()
+        assert row is not None
+        assert len(row.entity_id) <= 36
+        assert row.entity_id != basename
+        assert row.meta is not None
+        assert row.meta["importadas"] == 2
+        assert row.meta["leidas"] == 2
+        assert row.meta["duplicadas"] == 0
+    finally:
+        db.close()
