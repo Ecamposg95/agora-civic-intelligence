@@ -259,7 +259,22 @@ export function CapturaPage() {
                     </span>
                   </div>
                 )}
+                {perfilState.data.area && (
+                  <div className="rounded-lg border border-line bg-bg-sunken px-3 py-2.5">
+                    <span className="eyebrow block">Territorio</span>
+                    <span className="mt-0.5 inline-flex">
+                      <span className="pill border-accent/30 bg-accent/10 text-accent">
+                        Territorio: {perfilState.data.area.nombre}
+                      </span>
+                    </span>
+                  </div>
+                )}
               </div>
+            )}
+            {perfilState.data && !perfilState.data.area && (
+              <p className="mt-3 text-xs text-ink-faint">
+                Pídele a tu administrador que te asigne un territorio.
+              </p>
             )}
           </DataState>
         </Card>

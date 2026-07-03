@@ -50,6 +50,7 @@ export interface Perfil {
   lider_id: string | null;
   lider_nombre: string | null;
   organization_id: string | null;
+  area: { id: string; nombre: string; nivel: string } | null;
 }
 
 export async function getPerfil(): Promise<Perfil> {

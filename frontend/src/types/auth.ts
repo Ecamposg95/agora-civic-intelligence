@@ -20,6 +20,9 @@ export interface User {
   must_change_password?: boolean;
   lider_id?: string | null;
   seccion?: string | null;
+  area_id?: string | null;
+  area_nombre?: string | null;
+  area_nivel?: string | null;
 }
 
 export interface LoginRequest {

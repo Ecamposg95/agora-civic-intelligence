@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
+import { assignTerritory, searchAreas, type AreaHit } from "@/api/territory";
 import {
   createUser,
   deleteUser,
@@ -82,6 +83,15 @@ const USER_COLUMNS: Column<User>[] = [
     hideOnCard: true,
     render: (u) => (
       <span className="font-mono text-xs text-ink-muted">{u.phone || "—"}</span>
+    ),
+  },
+  {
+    key: "area_nombre",
+    header: "Territorio",
+    render: (u) => (
+      <span className={`pill ${TONE_BADGE[u.area_nombre ? "info" : "neutral"]}`}>
+        {u.area_nombre ?? "—"}
+      </span>
     ),
   },
 ];
@@ -385,11 +395,13 @@ export function UsersPage() {
       <EditUserModal
         user={editing}
         roles={assignableRoles}
+        isSuper={isSuper}
         onClose={() => setEditing(null)}
         onSaved={() => {
           setEditing(null);
           void fetchUsers();
         }}
+        onTerritoryAssigned={fetchUsers}
       />
 
       {/* Delete confirm */}
@@ -553,17 +565,31 @@ function CreateUserModal({
 function EditUserModal({
   user,
   roles,
+  isSuper,
   onClose,
   onSaved,
+  onTerritoryAssigned,
 }: {
   user: User | null;
   roles: UserRole[];
+  isSuper: boolean;
   onClose: () => void;
   onSaved: () => void;
+  onTerritoryAssigned: () => Promise<void>;
 }) {
   const [form, setForm] = useState<UserUpdatePayload>({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Territory assignment (superadmin only) — independent of the profile
+  // form above; each pick/clear calls the API immediately and refreshes
+  // the parent's user list, without closing this modal.
+  const [currentArea, setCurrentArea] = useState<{ id: string; nombre: string } | null>(null);
+  const [areaQuery, setAreaQuery] = useState("");
+  const [areaResults, setAreaResults] = useState<AreaHit[]>([]);
+  const [areaSearching, setAreaSearching] = useState(false);
+  const [areaError, setAreaError] = useState<string | null>(null);
+  const [assigningArea, setAssigningArea] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -574,8 +600,67 @@ function EditUserModal({
         is_active: user.is_active,
       });
       setError(null);
+      setCurrentArea(
+        user.area_id && user.area_nombre
+          ? { id: user.area_id, nombre: user.area_nombre }
+          : null,
+      );
+      setAreaQuery("");
+      setAreaResults([]);
+      setAreaError(null);
     }
   }, [user]);
+
+  // Debounced area search — only while the modal is in superadmin mode.
+  useEffect(() => {
+    if (!isSuper) return;
+    const q = areaQuery.trim();
+    if (!q) {
+      setAreaResults([]);
+      setAreaSearching(false);
+      return;
+    }
+    setAreaSearching(true);
+    const timer = setTimeout(() => {
+      searchAreas(q)
+        .then(setAreaResults)
+        .catch((err) => setAreaError(err instanceof Error ? err.message : "No se pudo buscar"))
+        .finally(() => setAreaSearching(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [areaQuery, isSuper]);
+
+  const handleAssignArea = async (hit: AreaHit) => {
+    if (!user) return;
+    setAssigningArea(true);
+    setAreaError(null);
+    try {
+      await assignTerritory(user.id, hit.id);
+      setCurrentArea({ id: hit.id, nombre: hit.name });
+      setAreaQuery("");
+      setAreaResults([]);
+      await onTerritoryAssigned();
+    } catch (err) {
+      setAreaError(err instanceof Error ? err.message : "No se pudo asignar el territorio");
+    } finally {
+      setAssigningArea(false);
+    }
+  };
+
+  const handleClearArea = async () => {
+    if (!user) return;
+    setAssigningArea(true);
+    setAreaError(null);
+    try {
+      await assignTerritory(user.id, null);
+      setCurrentArea(null);
+      await onTerritoryAssigned();
+    } catch (err) {
+      setAreaError(err instanceof Error ? err.message : "No se pudo quitar el territorio");
+    } finally {
+      setAssigningArea(false);
+    }
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -654,6 +739,53 @@ function EditUserModal({
           </div>
         )}
       </form>
+
+      {isSuper && (
+        <div className="mt-4 border-t border-line pt-4">
+          <label className="field-label">Territorio</label>
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className={`pill ${TONE_BADGE[currentArea ? "info" : "neutral"]}`}>
+              {currentArea?.nombre ?? "Sin territorio asignado"}
+            </span>
+            {currentArea && (
+              <button
+                type="button"
+                className="rounded-md border border-line bg-bg-sunken px-2 py-1 text-xs font-medium text-ink-muted transition-colors hover:border-state-critical/40 hover:text-state-critical"
+                onClick={() => void handleClearArea()}
+                disabled={assigningArea}
+              >
+                Quitar
+              </button>
+            )}
+          </div>
+          <input
+            className="field-input"
+            placeholder="Buscar área (municipio, sección…)"
+            value={areaQuery}
+            onChange={(e) => setAreaQuery(e.target.value)}
+            disabled={assigningArea}
+          />
+          {areaSearching && <p className="mt-1 text-xs text-ink-faint">Buscando…</p>}
+          {areaResults.length > 0 && (
+            <ul className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-line bg-bg-sunken">
+              {areaResults.map((hit) => (
+                <li key={hit.id}>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-ink transition-colors hover:bg-panel-hover"
+                    onClick={() => void handleAssignArea(hit)}
+                    disabled={assigningArea}
+                  >
+                    <span className="truncate">{hit.name}</span>
+                    <span className="ml-2 shrink-0 text-xs text-ink-faint">{hit.level}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {areaError && <p className="mt-1 text-xs text-state-critical">{areaError}</p>}
+        </div>
+      )}
     </Modal>
   );
 }
