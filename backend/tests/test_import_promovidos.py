@@ -96,6 +96,8 @@ def test_import_rows_audit_entity_id_is_not_pii(tmp_path):
     person names and can exceed the String(36) column, which crashes on
     Postgres (StringDataRightTruncation) even though SQLite silently accepts
     it. Counts belong in ``meta``, not the identifier."""
+    import hashlib
+
     basename = "DAVID CESAR CORZA MONTES DE OCA LARGO NOMBRE_Mayus.xlsx"
     assert len(basename) > 36
     p = tmp_path / basename
@@ -110,10 +112,17 @@ def test_import_rows_audit_entity_id_is_not_pii(tmp_path):
                                           campaign_id=ALPHA_CAMPAIGN_ID, path=str(p))
         assert res["importadas"] == 2
 
+        # Fetch THIS import's audit row deterministically by its expected
+        # entity_id hash — AuditLog.id is a UUID (not a sequential key), so
+        # order_by(id).first() is NOT "most recent" and picks a wrong row in the
+        # full suite where other tests also write registro.import audits.
+        expected_ref = hashlib.sha1(basename.encode("utf-8")).hexdigest()[:16]
         row = db.execute(
-            select(AuditLog).where(AuditLog.action == "registro.import")
-            .order_by(AuditLog.id.desc())
-        ).scalars().first()
+            select(AuditLog).where(
+                AuditLog.action == "registro.import",
+                AuditLog.entity_id == expected_ref,
+            )
+        ).scalars().one()
         assert row is not None
         assert len(row.entity_id) <= 36
         assert row.entity_id != basename
