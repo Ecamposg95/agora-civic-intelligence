@@ -15,6 +15,11 @@ _CSV = Path(__file__).parent / "san_mateo_atenco_secciones_2024.csv"
 _MUNI_CODE = "15076"
 _MUNI_NAME = "San Mateo Atenco"
 _ANIO = 2024
+# Secciones del municipio que NO están en la matriz electoral 2024 del estudio
+# (el estudio las omitió) pero sí tienen promovidos capturados. Se siembran como
+# áreas para que entren al alcance territorial; no llevan fila SeccionElectoral,
+# así que su contexto electoral se muestra vacío ("—").
+_EXTRA_SECCIONES = ["4127"]
 
 
 def seed_demo_territory(db: Session) -> None:
@@ -57,5 +62,19 @@ def seed_demo_territory(db: Session) -> None:
                 participacion=float(r["participacion"]),
                 coalicion=int(r["coalicion"]), morena=int(r["morena"]),
                 margen=int(r["margen"]), prioridad=r["prioridad"],
+            ))
+
+    # 3. Extra secciones del municipio sin matriz electoral (idempotente)
+    for code in _EXTRA_SECCIONES:
+        exists = db.execute(
+            select(ElectoralArea).where(
+                ElectoralArea.code == code,
+                ElectoralArea.level == AreaLevel.SECCION,
+            )
+        ).scalar_one_or_none()
+        if exists is None:
+            db.add(ElectoralArea(
+                name=f"Sección {code}", code=code, level=AreaLevel.SECCION,
+                organization_id=None, municipio_id=muni.id, parent_id=muni.id,
             ))
     db.commit()
