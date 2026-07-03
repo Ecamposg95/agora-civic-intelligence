@@ -1,0 +1,61 @@
+"""Idempotent demo-territory seed: San Mateo Atenco municipio + 22 secciones
+(ElectoralArea) and the 2024 electoral matrix (SeccionElectoral) from the study CSV."""
+from __future__ import annotations
+
+import csv
+from pathlib import Path
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.electoral_area import AreaLevel, ElectoralArea
+from app.models.seccion_electoral import SeccionElectoral
+
+_CSV = Path(__file__).parent / "san_mateo_atenco_secciones_2024.csv"
+_MUNI_CODE = "15076"
+_MUNI_NAME = "San Mateo Atenco"
+_ANIO = 2024
+
+
+def seed_demo_territory(db: Session) -> None:
+    # 1. Municipio (idempotent by code)
+    muni = db.execute(
+        select(ElectoralArea).where(ElectoralArea.code == _MUNI_CODE)
+    ).scalar_one_or_none()
+    if muni is None:
+        muni = ElectoralArea(
+            name=_MUNI_NAME, code=_MUNI_CODE,
+            level=AreaLevel.MUNICIPIO, organization_id=None,
+        )
+        db.add(muni)
+        db.flush()
+
+    rows = list(csv.DictReader(_CSV.open(encoding="utf-8")))
+
+    # 2. Secciones (ElectoralArea) + matrix (SeccionElectoral)
+    for r in rows:
+        code = r["seccion"]
+        sec_area = db.execute(
+            select(ElectoralArea).where(
+                ElectoralArea.code == code,
+                ElectoralArea.level == AreaLevel.SECCION,
+            )
+        ).scalar_one_or_none()
+        if sec_area is None:
+            db.add(ElectoralArea(
+                name=f"Sección {code}", code=code, level=AreaLevel.SECCION,
+                organization_id=None, municipio_id=muni.id, parent_id=muni.id,
+            ))
+        fact = db.execute(
+            select(SeccionElectoral).where(
+                SeccionElectoral.seccion == code, SeccionElectoral.anio == _ANIO)
+        ).scalar_one_or_none()
+        if fact is None:
+            db.add(SeccionElectoral(
+                seccion=code, municipio=_MUNI_NAME, anio=_ANIO,
+                lista_nominal=int(r["lista_nominal"]), votos=int(r["votos"]),
+                participacion=float(r["participacion"]),
+                coalicion=int(r["coalicion"]), morena=int(r["morena"]),
+                margen=int(r["margen"]), prioridad=r["prioridad"],
+            ))
+    db.commit()

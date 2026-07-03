@@ -64,6 +64,12 @@ async def lifespan(app: FastAPI):
         except Exception:
             logger.exception("Database bootstrap failed during startup")
             raise
+    if os.getenv("SEED_DEMO_TERRITORY", "").lower() == "true":
+        from app.database import SessionLocal
+        from app.seeds.demo_territory import seed_demo_territory
+
+        with SessionLocal() as db:
+            seed_demo_territory(db)
     yield
 
 
