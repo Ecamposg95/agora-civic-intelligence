@@ -62,3 +62,22 @@ def test_promovidos_empty_without_territory(client):
     assert r.status_code == 200
     assert r.json()["has_territory"] is False
     assert r.json()["items"] == []
+
+
+def test_promovidos_admin_bypasses_territory(client):
+    # Relies on promovido rows already seeded by test_promovidos_scoped_and_enriched
+    # (module-scoped SQLite DB — see conftest.py); do not re-invoke the setup
+    # helper here, it would violate the seccion_electoral/client_uuid unique
+    # constraints on a second insert.
+    db = TestingSessionLocal()
+    try:
+        admin = db.execute(select(User).where(User.email == "admin@alpha.gov")).scalar_one()
+        assert admin.area_id is None
+    finally:
+        db.close()
+    r = client.get("/api/promovidos", headers=_h(client, "admin@alpha.gov"))
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["has_territory"] is True
+    names = [i["nombre_completo"] for i in body["items"]]
+    assert "Promovido Uno" in names and "Fuera" in names  # admin: no territory filter

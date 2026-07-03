@@ -44,10 +44,11 @@ def list_promovidos(
     prioridad: Optional[str], q: Optional[str], limit: int, offset: int,
 ) -> tuple[list[Registro], int, bool]:
     secciones = territory_service.scope_secciones(db, ctx.user)
-    has_territory = ctx.is_superadmin or bool(secciones)
+    bypass_territory = ctx.is_superadmin or ctx.role == UserRole.ADMIN
+    has_territory = bypass_territory or bool(secciones)
 
     stmt = _promovido_role_scoped(ctx)
-    if not ctx.is_superadmin:
+    if not bypass_territory:
         if not secciones:
             stmt = stmt.where(sa.false())
         else:
