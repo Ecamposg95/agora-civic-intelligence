@@ -32,17 +32,26 @@ def main() -> int:
         org_id = camp.organization_id
         files = sorted(glob.glob(os.path.join(args.dir, "*.xlsx")))
         total = {"leidas": 0, "importadas": 0, "duplicadas": 0}
+        errores = 0
         for i, f in enumerate(files, 1):
-            if args.dry_run:
-                rows = import_service.parse_workbook(f)
-                print(f"[{i}/{len(files)}] {len(rows)} filas (dry-run)")
-                continue
-            res = import_service.import_rows(
-                db, organization_id=org_id, campaign_id=args.campaign, path=f)
-            for k in total:
-                total[k] += res[k]
-            print(f"[{i}/{len(files)}] {res}")
-        print(f"TOTAL: {total}")
+            # Per-file isolation: a single malformed workbook must never abort
+            # the whole run. On failure we roll back that file's transaction,
+            # log only the index (never the filename — it is PII), and continue.
+            try:
+                if args.dry_run:
+                    rows = import_service.parse_workbook(f)
+                    print(f"[{i}/{len(files)}] {len(rows)} filas (dry-run)")
+                    continue
+                res = import_service.import_rows(
+                    db, organization_id=org_id, campaign_id=args.campaign, path=f)
+                for k in total:
+                    total[k] += res[k]
+                print(f"[{i}/{len(files)}] {res}")
+            except Exception as exc:  # noqa: BLE001 — keep going on any file error
+                db.rollback()
+                errores += 1
+                print(f"[{i}/{len(files)}] ERROR ({type(exc).__name__}) — omitido")
+        print(f"TOTAL: {total} | archivos con error: {errores}")
         return 0
     finally:
         db.close()

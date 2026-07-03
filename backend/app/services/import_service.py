@@ -15,9 +15,37 @@ from app.services.audit_service import record_audit
 
 _GENERIC_SHEETS = {"C1", "A", "HOJA1", "HOJA 1", "SHEET1"}
 
+# Registro column widths (String(n)). Values are capped to these so a stray
+# oversized cell (or a column-misaligned row) can never abort a batch commit
+# with a Postgres StringDataRightTruncation.
+_MAXLEN = {
+    "nombre_completo": 255, "direccion": 500, "colonia": 255,
+    "telefono": 40, "estructura": 120, "promotor": 160, "observacion": 1000,
+}
+_SECCION_RE = re.compile(r"\d{1,6}")
+
 
 def _clean(v) -> str:
     return re.sub(r"\s+", " ", str(v).strip()) if v is not None else ""
+
+
+def _fit(v: Optional[str], key: str) -> Optional[str]:
+    n = _MAXLEN.get(key)
+    if v is not None and n is not None and len(v) > n:
+        return v[:n]
+    return v
+
+
+def _norm_seccion(v) -> Optional[str]:
+    """A sección is a short number (e.g. 4138). Excel may hand us an int/float.
+    Returns the normalized digits, or None if absent/garbage (a non-numeric
+    value here means the row's columns are misaligned)."""
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return str(int(v))
+    s = _clean(v)
+    return s or None
 
 
 def _edad_from(dia, mes, anio, ref_year: int = 2026) -> Optional[int]:
@@ -33,10 +61,12 @@ def _edad_from(dia, mes, anio, ref_year: int = 2026) -> Optional[int]:
 
 
 def _find_header_row(ws) -> Optional[int]:
-    for row in ws.iter_rows(min_row=1, max_row=8):
+    # Use the 1-based row index (min_row=1) rather than ``row[0].row`` — in
+    # read-only mode a blank leading cell is an EmptyCell with no ``.row``.
+    for i, row in enumerate(ws.iter_rows(min_row=1, max_row=8), start=1):
         joined = " ".join(_clean(c.value).upper() for c in row)
         if "PRIMER APELLIDO" in joined and "NOMBRE" in joined:
-            return row[0].row
+            return i
     return None
 
 
@@ -64,25 +94,30 @@ def parse_workbook(path: str) -> list[dict]:
             ap1, ap2, nombre = _clean(row[1]), _clean(row[2]), _clean(row[3])
             if not (ap1 or ap2 or nombre):
                 continue  # empty / spacer row
+            seccion = _norm_seccion(row[10])
+            # A present-but-non-numeric sección means this file's columns are
+            # misaligned for this row (e.g. a colonia name landed in the sección
+            # cell). Skip it rather than importing garbage / crashing the batch.
+            if seccion is not None and not _SECCION_RE.fullmatch(seccion):
+                continue
             nombre_completo = _clean(f"{nombre} {ap1} {ap2}")
             calle, num = _clean(row[7]), _clean(row[8])
             direccion = _clean(f"{calle} {num}") or None
-            seccion = _clean(row[10]) or None
             tel = re.sub(r"\D", "", _clean(row[11])) or None
             dia, mes, anio = row[4], row[5], row[6]
             edad = _edad_from(dia, mes, anio)
             nac = "/".join(_clean(x) for x in (dia, mes, anio) if _clean(x))
             observacion = f"nac: {nac}" if nac else None
             out.append({
-                "nombre_completo": nombre_completo,
-                "direccion": direccion,
-                "colonia": _clean(row[9]) or None,
+                "nombre_completo": _fit(nombre_completo, "nombre_completo"),
+                "direccion": _fit(direccion, "direccion"),
+                "colonia": _fit(_clean(row[9]) or None, "colonia"),
                 "seccion": seccion,
-                "telefono": tel,
+                "telefono": _fit(tel, "telefono"),
                 "edad": edad,
-                "observacion": observacion,
-                "promotor": promotor,
-                "estructura": estructura,
+                "observacion": _fit(observacion, "observacion"),
+                "promotor": _fit(promotor, "promotor"),
+                "estructura": _fit(estructura, "estructura"),
                 "_sheet": ws.title,
                 "_row": None,  # row index attached by caller for client_uuid
             })

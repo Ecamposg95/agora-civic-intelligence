@@ -33,6 +33,29 @@ def _make_xlsx(path, header_row=1):
     wb.save(path)
 
 
+def test_parse_skips_misaligned_rows_and_caps_lengths(tmp_path):
+    """A row whose 'sección' cell holds non-numeric text (column misalignment,
+    as in FORMATO DE LLENADO FERNANDO GAMA) is skipped, not imported/crashed.
+    Oversized string cells are capped to their column width."""
+    p = tmp_path / "FORMATO DE LLENADO RARO_Mayus.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "PROMOTOR X"
+    ws.cell(1, 2, "PRIMER APELLIDO"); ws.cell(1, 4, "NOMBRE"); ws.cell(1, 11, "SECCIÓN")
+    ws.cell(2, 11, "SECCIÓN")
+    # valid row: numeric sección + an oversized colonia (>255 chars)
+    ws.cell(3, 2, "PEREZ"); ws.cell(3, 3, "LOPEZ"); ws.cell(3, 4, "ANA")
+    ws.cell(3, 10, "X" * 400); ws.cell(3, 11, 4121)
+    # misaligned row: a colonia name landed in the sección cell → must be skipped
+    ws.cell(4, 2, "GONZALEZ"); ws.cell(4, 4, "LUIS"); ws.cell(4, 11, "LA CONCEPCION")
+    wb.save(str(p))
+
+    rows = import_service.parse_workbook(str(p))
+    assert len(rows) == 1                       # misaligned row dropped
+    assert rows[0]["seccion"] == "4121"
+    assert len(rows[0]["colonia"]) == 255       # capped to column width
+
+
 def test_parse_maps_columns_and_edad(tmp_path):
     p = tmp_path / "ACTIVISMO CULTURA_Mayus.xlsx"
     _make_xlsx(str(p), header_row=1)
