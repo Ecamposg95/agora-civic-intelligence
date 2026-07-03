@@ -1,0 +1,125 @@
+"""Parser de Excel de promovidos + import idempotente."""
+import openpyxl
+from sqlalchemy import func, select
+
+from app.models.audit_log import AuditLog
+from app.models.registro import Registro
+from app.services import import_service
+from tests.conftest import ALPHA_CAMPAIGN_ID, TestingSessionLocal
+
+
+def _make_xlsx(path, header_row=1):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "ALAN URIEL RAMIREZ"
+    r = header_row
+    ws.cell(r, 1, "N.P."); ws.cell(r, 2, "PRIMER APELLIDO"); ws.cell(r, 3, "SEGUNDO APELLIDO")
+    ws.cell(r, 4, "NOMBRE"); ws.cell(r, 5, "FECHA DE NACIMIENTO"); ws.cell(r, 8, "DOMICILIO")
+    ws.cell(r, 12, "TELÉFONO CON WHATSAPP")
+    ws.cell(r+1, 5, "DIA"); ws.cell(r+1, 6, "MES"); ws.cell(r+1, 7, "AÑO")
+    ws.cell(r+1, 8, "CALLE"); ws.cell(r+1, 9, "#"); ws.cell(r+1, 10, "BARRIO/COLONIA")
+    ws.cell(r+1, 11, "SECCIÓN")
+    # data rows
+    ws.cell(r+2, 1, 1); ws.cell(r+2, 2, "LEÓN"); ws.cell(r+2, 3, "ALCARAZ"); ws.cell(r+2, 4, "PEDRO")
+    ws.cell(r+2, 5, 2); ws.cell(r+2, 6, 3); ws.cell(r+2, 7, 1988)
+    ws.cell(r+2, 8, "C. MADERO"); ws.cell(r+2, 9, 506); ws.cell(r+2, 10, "BO. SAN FRANCISCO")
+    ws.cell(r+2, 11, 4132); ws.cell(r+2, 12, "7226127261")
+    # 2-digit year row
+    ws.cell(r+3, 1, 2); ws.cell(r+3, 2, "GONZALEZ"); ws.cell(r+3, 3, "DAVILA"); ws.cell(r+3, 4, "ALBERTO")
+    ws.cell(r+3, 5, 3); ws.cell(r+3, 6, 6); ws.cell(r+3, 7, 71)
+    ws.cell(r+3, 11, 4130); ws.cell(r+3, 12, "7223478883")
+    # empty row (only N.P.)
+    ws.cell(r+4, 1, 3)
+    wb.save(path)
+
+
+def test_parse_maps_columns_and_edad(tmp_path):
+    p = tmp_path / "ACTIVISMO CULTURA_Mayus.xlsx"
+    _make_xlsx(str(p), header_row=1)
+    rows = import_service.parse_workbook(str(p))
+    assert len(rows) == 2  # empty row skipped
+    r0 = rows[0]
+    assert r0["nombre_completo"] == "PEDRO LEÓN ALCARAZ"
+    assert r0["seccion"] == "4132"
+    assert r0["telefono"] == "7226127261"
+    assert r0["edad"] == 2026 - 1988
+    assert r0["promotor"] == "ALAN URIEL RAMIREZ"
+    assert r0["estructura"] == "ACTIVISMO CULTURA"
+    assert r0["observacion"].startswith("nac: ")
+    assert rows[1]["edad"] == 2026 - 1971  # 2-digit year 71 → 1971
+
+
+def test_parse_header_on_row_3(tmp_path):
+    p = tmp_path / "EMANUEL_Mayus.xlsx"
+    _make_xlsx(str(p), header_row=3)
+    rows = import_service.parse_workbook(str(p))
+    assert len(rows) == 2 and rows[0]["seccion"] == "4132"
+
+
+def test_import_rows_idempotent_and_audited(tmp_path):
+    p = tmp_path / "ACTIVISMO CULTURA_Mayus.xlsx"
+    _make_xlsx(str(p), header_row=1)
+    db = TestingSessionLocal()
+    try:
+        org_id = db.execute(select(Registro.organization_id).limit(1)).scalar()  # may be None
+        # use the Alpha org id from a seeded user instead:
+        from app.models.user import User
+        org_id = db.execute(select(User.organization_id).where(
+            User.email == "coord@alpha.gov")).scalar_one()
+
+        res1 = import_service.import_rows(db, organization_id=org_id,
+                                          campaign_id=ALPHA_CAMPAIGN_ID, path=str(p))
+        assert res1["importadas"] == 2
+        n1 = db.execute(select(func.count()).select_from(Registro).where(
+            Registro.promotor == "ALAN URIEL RAMIREZ")).scalar_one()
+        assert n1 == 2
+
+        # re-run → no duplicates
+        res2 = import_service.import_rows(db, organization_id=org_id,
+                                          campaign_id=ALPHA_CAMPAIGN_ID, path=str(p))
+        assert res2["importadas"] == 0 and res2["duplicadas"] == 2
+        n2 = db.execute(select(func.count()).select_from(Registro).where(
+            Registro.promotor == "ALAN URIEL RAMIREZ")).scalar_one()
+        assert n2 == 2
+
+        # one batch-audit row per import call
+        n_audit = db.execute(select(func.count()).select_from(AuditLog).where(
+            AuditLog.action == "registro.import")).scalar_one()
+        assert n_audit >= 1
+    finally:
+        db.close()
+
+
+def test_import_rows_audit_entity_id_is_not_pii(tmp_path):
+    """AuditLog.entity_id must be a non-PII, <=36-char hash — never the (PII,
+    length-unbounded) filename. Real filenames in docs/data/separados/ are
+    person names and can exceed the String(36) column, which crashes on
+    Postgres (StringDataRightTruncation) even though SQLite silently accepts
+    it. Counts belong in ``meta``, not the identifier."""
+    basename = "DAVID CESAR CORZA MONTES DE OCA LARGO NOMBRE_Mayus.xlsx"
+    assert len(basename) > 36
+    p = tmp_path / basename
+    _make_xlsx(str(p), header_row=1)
+    db = TestingSessionLocal()
+    try:
+        from app.models.user import User
+        org_id = db.execute(select(User.organization_id).where(
+            User.email == "coord@alpha.gov")).scalar_one()
+
+        res = import_service.import_rows(db, organization_id=org_id,
+                                          campaign_id=ALPHA_CAMPAIGN_ID, path=str(p))
+        assert res["importadas"] == 2
+
+        row = db.execute(
+            select(AuditLog).where(AuditLog.action == "registro.import")
+            .order_by(AuditLog.id.desc())
+        ).scalars().first()
+        assert row is not None
+        assert len(row.entity_id) <= 36
+        assert row.entity_id != basename
+        assert row.meta is not None
+        assert row.meta["importadas"] == 2
+        assert row.meta["leidas"] == 2
+        assert row.meta["duplicadas"] == 0
+    finally:
+        db.close()
