@@ -38,6 +38,7 @@ from app.models.ingestion import DataSource, IngestRun
 from app.models.organization import Organization
 from app.models.privacy import PrivacyAcceptance, PrivacyNotice
 from app.models.registro import Registro
+from app.models.seccion_electoral import SeccionElectoral
 from app.models.user import User, UserRole
 
 ALPHA_CAMPAIGN_ID = "11111111-1111-1111-1111-111111111111"
@@ -75,6 +76,7 @@ Base.metadata.create_all(
         Registro.__table__,
         PrivacyNotice.__table__,
         PrivacyAcceptance.__table__,
+        SeccionElectoral.__table__,
     ],
 )
 

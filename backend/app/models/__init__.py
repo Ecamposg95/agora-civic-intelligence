@@ -14,6 +14,7 @@ from app.models.ingestion import DataSource, IngestRun  # noqa: F401
 from app.models.organization import Organization
 from app.models.privacy import PrivacyAcceptance, PrivacyNotice  # noqa: F401
 from app.models.registro import Registro  # noqa: F401
+from app.models.seccion_electoral import SeccionElectoral  # noqa: F401
 from app.models.user import User
 
 __all__ = [
@@ -34,5 +35,6 @@ __all__ = [
     "PrivacyAcceptance",
     "PrivacyNotice",
     "Registro",
+    "SeccionElectoral",
     "User",
 ]
