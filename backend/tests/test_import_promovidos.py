@@ -1,7 +1,11 @@
 """Parser de Excel de promovidos + import idempotente."""
 import openpyxl
+from sqlalchemy import func, select
 
+from app.models.audit_log import AuditLog
+from app.models.registro import Registro
 from app.services import import_service
+from tests.conftest import ALPHA_CAMPAIGN_ID, TestingSessionLocal
 
 
 def _make_xlsx(path, header_row=1):
@@ -50,3 +54,37 @@ def test_parse_header_on_row_3(tmp_path):
     _make_xlsx(str(p), header_row=3)
     rows = import_service.parse_workbook(str(p))
     assert len(rows) == 2 and rows[0]["seccion"] == "4132"
+
+
+def test_import_rows_idempotent_and_audited(tmp_path):
+    p = tmp_path / "ACTIVISMO CULTURA_Mayus.xlsx"
+    _make_xlsx(str(p), header_row=1)
+    db = TestingSessionLocal()
+    try:
+        org_id = db.execute(select(Registro.organization_id).limit(1)).scalar()  # may be None
+        # use the Alpha org id from a seeded user instead:
+        from app.models.user import User
+        org_id = db.execute(select(User.organization_id).where(
+            User.email == "coord@alpha.gov")).scalar_one()
+
+        res1 = import_service.import_rows(db, organization_id=org_id,
+                                          campaign_id=ALPHA_CAMPAIGN_ID, path=str(p))
+        assert res1["importadas"] == 2
+        n1 = db.execute(select(func.count()).select_from(Registro).where(
+            Registro.promotor == "ALAN URIEL RAMIREZ")).scalar_one()
+        assert n1 == 2
+
+        # re-run → no duplicates
+        res2 = import_service.import_rows(db, organization_id=org_id,
+                                          campaign_id=ALPHA_CAMPAIGN_ID, path=str(p))
+        assert res2["importadas"] == 0 and res2["duplicadas"] == 2
+        n2 = db.execute(select(func.count()).select_from(Registro).where(
+            Registro.promotor == "ALAN URIEL RAMIREZ")).scalar_one()
+        assert n2 == 2
+
+        # one batch-audit row per import call
+        n_audit = db.execute(select(func.count()).select_from(AuditLog).where(
+            AuditLog.action == "registro.import")).scalar_one()
+        assert n_audit >= 1
+    finally:
+        db.close()

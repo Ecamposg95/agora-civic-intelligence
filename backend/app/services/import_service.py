@@ -1,11 +1,17 @@
 """Promovidos importer: parse messy multi-sheet XLSX into Registro-ready dicts."""
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from typing import Optional
 
 import openpyxl
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.registro import Registro
+from app.services.audit_service import record_audit
 
 _GENERIC_SHEETS = {"C1", "A", "HOJA1", "HOJA 1", "SHEET1"}
 
@@ -82,3 +88,61 @@ def parse_workbook(path: str) -> list[dict]:
             })
     wb.close()
     return out
+
+
+def _client_uuid(path: str, sheet: str, idx: int) -> str:
+    key = f"{os.path.basename(path)}|{sheet}|{idx}"
+    return hashlib.sha1(key.encode("utf-8")).hexdigest()[:32]
+
+
+def import_rows(db: Session, *, organization_id: str, campaign_id: str, path: str) -> dict:
+    """Idempotently import promovidos from ``path`` into ``Registro``.
+
+    Never logs or prints PII — only counts. Writes one ``registro.import``
+    AuditLog row per call (batch-level, not per-record).
+    """
+    rows = parse_workbook(path)
+    leidas = len(rows)
+    importadas = 0
+    duplicadas = 0
+    # stable per-sheet counter for deterministic client_uuid
+    per_sheet: dict[str, int] = {}
+    for r in rows:
+        sheet = r["_sheet"]
+        idx = per_sheet.get(sheet, 0)
+        per_sheet[sheet] = idx + 1
+        cuid = _client_uuid(path, sheet, idx)
+        exists = db.execute(
+            select(Registro.id).where(
+                Registro.campaign_id == campaign_id,
+                Registro.client_uuid == cuid,
+            )
+        ).scalar_one_or_none()
+        if exists:
+            duplicadas += 1
+            continue
+        db.add(Registro(
+            organization_id=organization_id,
+            campaign_id=campaign_id,
+            activista_id=None,
+            nombre_completo=r["nombre_completo"],
+            seccion=r["seccion"],
+            direccion=r["direccion"],
+            colonia=r["colonia"],
+            telefono=r["telefono"],
+            edad=r["edad"],
+            estructura=r["estructura"],
+            promotor=r["promotor"],
+            observacion=r["observacion"],
+            consentimiento=True,
+            aviso_version="import-papel-2024",
+            client_uuid=cuid,
+        ))
+        importadas += 1
+    record_audit(
+        db, action="registro.import", actor_id=None,
+        organization_id=organization_id, entity_type="registro_batch",
+        entity_id=os.path.basename(path),
+    )
+    db.commit()
+    return {"leidas": leidas, "importadas": importadas, "duplicadas": duplicadas}
