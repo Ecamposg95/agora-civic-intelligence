@@ -11,6 +11,7 @@ from app.models.catalog import Cargo, Coalition, CoalitionParty, Party  # noqa: 
 from app.models.census import CensusMetric  # noqa: F401
 from app.models.electoral_area import ElectoralArea
 from app.models.ingestion import DataSource, IngestRun  # noqa: F401
+from app.models.militante import Militante  # noqa: F401
 from app.models.organization import Organization
 from app.models.privacy import PrivacyAcceptance, PrivacyNotice  # noqa: F401
 from app.models.registro import Registro  # noqa: F401
@@ -30,6 +31,7 @@ __all__ = [
     "DataSource",
     "ElectoralArea",
     "IngestRun",
+    "Militante",
     "Organization",
     "Party",
     "PrivacyAcceptance",

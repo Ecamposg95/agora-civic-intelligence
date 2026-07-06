@@ -37,6 +37,7 @@ from app.models.electoral_area import ElectoralArea
 from app.models.ingestion import DataSource, IngestRun
 from app.models.organization import Organization
 from app.models.privacy import PrivacyAcceptance, PrivacyNotice
+from app.models.militante import Militante
 from app.models.registro import Registro
 from app.models.seccion_electoral import SeccionElectoral
 from app.models.user import User, UserRole
@@ -74,6 +75,7 @@ Base.metadata.create_all(
         IngestRun.__table__,
         CensusMetric.__table__,
         Registro.__table__,
+        Militante.__table__,
         PrivacyNotice.__table__,
         PrivacyAcceptance.__table__,
         SeccionElectoral.__table__,
