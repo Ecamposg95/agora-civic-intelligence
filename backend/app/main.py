@@ -35,6 +35,7 @@ from app.routers import (
     ingest,
     intel,
     maps,
+    militantes,
     organizations,
     privacy,
     promovidos,
@@ -57,6 +58,9 @@ async def lifespan(app: FastAPI):
     """
     from app.core.crypto import ensure_crypto_ready
     ensure_crypto_ready()
+    from app.core.storage import ensure_storage_ready, storage_enabled
+    if storage_enabled():
+        ensure_storage_ready()
     if os.getenv("RUN_DB_BOOTSTRAP", "1") == "1":
         from app.bootstrap import run_bootstrap
 
@@ -195,7 +199,7 @@ def _configure_error_handlers(app: FastAPI) -> None:
 def _register_routers(app: FastAPI) -> None:
     """Mount all API routers under the configured prefix."""
     prefix = settings.API_PREFIX
-    for module in (health, auth, users, organizations, campaigns, maps, analytics, sources, audit, intel, catalogs, territory, ingest, exports, registros, promovidos, privacy, admin, arco, reports):
+    for module in (health, auth, users, organizations, campaigns, maps, analytics, sources, audit, intel, catalogs, territory, ingest, exports, registros, militantes, promovidos, privacy, admin, arco, reports):
         app.include_router(module.router, prefix=prefix)
 
 
