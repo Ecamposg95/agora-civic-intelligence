@@ -261,6 +261,22 @@ def get_militante(db: Session, ctx: CampaignContext, mid: str) -> Optional[Milit
     ).scalar_one_or_none()
 
 
+def delete_militante(db: Session, ctx: CampaignContext, mid: str) -> bool:
+    """Soft-delete a militante (mistaken/duplicate capture). Scoped via
+    get_militante, so a caller can only delete what they can see. Audited.
+    The bucket objects are reclaimed later by the retention purge."""
+    m = get_militante(db, ctx, mid)
+    if m is None:
+        return False
+    m.deleted_at = datetime.now(timezone.utc)
+    m.updated_by = ctx.user.id
+    db.flush()
+    record_audit(db, action="militante.delete", actor_id=ctx.user.id,
+                 organization_id=ctx.organization_id, entity_type="militante", entity_id=m.id)
+    db.commit()
+    return True
+
+
 def set_estado(db: Session, ctx: CampaignContext, mid: str,
                data: MilitanteEstadoUpdate) -> Optional[Militante]:
     m = get_militante(db, ctx, mid)

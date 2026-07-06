@@ -106,3 +106,20 @@ def test_estado_update_requires_review_role(client):
                        json={"estado": "VALIDADO"})
     assert ok.status_code == 200, ok.text
     assert ok.json()["estado"] == "VALIDADO"
+
+
+def test_activista_can_delete_own_militante(client):
+    """Soft-delete removes the militante from scoped views (list/panorama)."""
+    h = _hdr(client, "activista1@alpha.gov")
+    r = client.post("/api/militantes", headers=h, json={
+        "nombre_completo": "Del Test", "consentimiento": True, "seccion": "4127"})
+    assert r.status_code == 201, r.text
+    mid = r.json()["id"]
+    d = client.delete(f"/api/militantes/{mid}", headers=h)
+    assert d.status_code == 204, d.text
+    # gone from scoped get + list
+    assert client.get(f"/api/militantes/{mid}", headers=h).status_code == 404
+    ids = [m["id"] for m in client.get("/api/militantes", headers=h).json()["items"]]
+    assert mid not in ids
+    # second delete is a 404 (already gone)
+    assert client.delete(f"/api/militantes/{mid}", headers=h).status_code == 404

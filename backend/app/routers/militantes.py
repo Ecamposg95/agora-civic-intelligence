@@ -108,3 +108,11 @@ def reveal(db: DbSession, ctx: CampaignCtx, _p: _REVIEW, mid: str):
     if out is None:
         raise HTTPException(status_code=404, detail="Militante no encontrado")
     return MilitanteReveal.model_validate(out)
+
+
+@router.delete("/militantes/{mid}", status_code=status.HTTP_204_NO_CONTENT)
+def delete(db: DbSession, ctx: CampaignCtx, _p: _CAPTURE, mid: str) -> None:
+    # Scoped via get_militante: a caller can only delete a militante they can
+    # see (own, or within their territory for supervisory roles).
+    if not militante_service.delete_militante(db, ctx, mid):
+        raise HTTPException(status_code=404, detail="Militante no encontrado")
