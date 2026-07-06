@@ -19,12 +19,18 @@ def storage_enabled() -> bool:
 @lru_cache(maxsize=1)
 def _client():
     import boto3  # lazy: keeps the app/tests importable without boto3 until storage is used
+    from botocore.config import Config
+
+    # Railway buckets use virtual-hosted–style URLs (bucket as subdomain of the
+    # endpoint). boto3 defaults to path-style for custom endpoints, so force
+    # virtual addressing or requests 404.
     return boto3.client(
         "s3",
         endpoint_url=settings.BUCKET_ENDPOINT,
         aws_access_key_id=settings.BUCKET_ACCESS_KEY_ID,
         aws_secret_access_key=settings.BUCKET_SECRET_ACCESS_KEY,
         region_name=settings.BUCKET_REGION,
+        config=Config(s3={"addressing_style": "virtual"}),
     )
 
 
