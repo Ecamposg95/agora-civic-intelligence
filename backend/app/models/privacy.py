@@ -80,11 +80,17 @@ class PrivacyAcceptance(UUIDMixin, Base):
 
     __tablename__ = "privacy_acceptances"
 
-    registro_id: Mapped[str] = mapped_column(
+    # Nullable: an acceptance belongs to EITHER a registro OR a militante.
+    registro_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("registros.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
+    )
+    # Plain string (no FK), mirroring ArcoRequest: the trail survives a militante
+    # hard-delete and avoids a cross-table cascade on privacy_acceptances.
+    militante_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True,
     )
     notice_id: Mapped[str] = mapped_column(
         String(36),

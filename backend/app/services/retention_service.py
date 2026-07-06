@@ -28,6 +28,7 @@ Safety guarantees
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date as date_type
 from datetime import datetime, timedelta, timezone
@@ -38,8 +39,11 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.campaign import Contest
+from app.models.militante import Militante
 from app.models.registro import Registro
 from app.services.audit_service import record_audit
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -48,13 +52,20 @@ class PurgeResult:
 
     soft_deleted_purged: int = 0
     post_election_purged: int = 0
+    militantes_soft_deleted_purged: int = 0
+    militantes_post_election_purged: int = 0
     campaigns_purged: List[str] = field(default_factory=list)
     dry_run: bool = False
 
     @property
     def total_purged(self) -> int:
         """Total rows hard-deleted (or that would be deleted in dry_run)."""
-        return self.soft_deleted_purged + self.post_election_purged
+        return (
+            self.soft_deleted_purged
+            + self.post_election_purged
+            + self.militantes_soft_deleted_purged
+            + self.militantes_post_election_purged
+        )
 
 
 def _coerce_date(value) -> Optional[date_type]:
@@ -71,6 +82,28 @@ def _coerce_date(value) -> Optional[date_type]:
         return date_type.fromisoformat(str(value))
     except (ValueError, TypeError):
         return None
+
+
+def _purge_militante_docs(rows: list[Militante]) -> None:
+    """Best-effort delete of bucket objects (INE photos + signature) for a batch
+    of militantes about to be hard-deleted.
+
+    Guards each object delete individually so a single failed/network-flaky
+    delete does not abort the purge of the remaining rows.
+    """
+    from app.core import storage  # lazy: keeps the app importable without boto3
+
+    if not storage.storage_enabled():
+        return
+
+    for row in rows:
+        for key in (row.credencial_frente_key, row.credencial_reverso_key, row.firma_key):
+            if not key:
+                continue
+            try:
+                storage.delete_object(key)
+            except Exception:  # noqa: BLE001 - never let a storage hiccup abort a purge
+                logger.warning("retention.purge: failed to delete bucket object key=%s", key)
 
 
 def purge_expired(
@@ -134,6 +167,35 @@ def purge_expired(
 
     result.soft_deleted_purged = soft_count
 
+    # ── Pass A (militantes): hard-delete soft-deleted rows past grace period ──
+    militante_soft_filter = (
+        Militante.deleted_at.is_not(None),
+        Militante.deleted_at < soft_cutoff,
+    )
+
+    militante_soft_count: int = db.scalar(
+        select(func.count(Militante.id)).where(*militante_soft_filter)
+    ) or 0
+
+    if not dry_run and militante_soft_count > 0:
+        militante_rows = list(
+            db.execute(select(Militante).where(*militante_soft_filter)).scalars().all()
+        )
+        _purge_militante_docs(militante_rows)
+        db.execute(delete(Militante).where(*militante_soft_filter))
+        record_audit(
+            db,
+            action="retention.purge",
+            entity_type="militante",
+            meta={
+                "pass": "soft_deleted",
+                "count": militante_soft_count,
+                "cutoff_days": settings.RETENTION_PURGE_SOFT_DELETED_DAYS,
+            },
+        )
+
+    result.militantes_soft_deleted_purged = militante_soft_count
+
     # ── Pass B: post-election purge ───────────────────────────────────────────
     # Eligible: max(election_date) + RETENTION_DAYS_AFTER_ELECTION <= today
     #         ≡ max(election_date) <= today - RETENTION_DAYS_AFTER_ELECTION
@@ -176,6 +238,35 @@ def purge_expired(
 
     result.post_election_purged = post_count
     result.campaigns_purged = list(eligible_campaign_ids)
+
+    # ── Pass B (militantes): post-election purge, same eligible campaigns ─────
+    militante_post_count = 0
+    if eligible_campaign_ids:
+        militante_post_filter = Militante.campaign_id.in_(eligible_campaign_ids)
+
+        militante_post_count = db.scalar(
+            select(func.count(Militante.id)).where(militante_post_filter)
+        ) or 0
+
+        if not dry_run and militante_post_count > 0:
+            militante_rows = list(
+                db.execute(select(Militante).where(militante_post_filter)).scalars().all()
+            )
+            _purge_militante_docs(militante_rows)
+            db.execute(delete(Militante).where(militante_post_filter))
+            record_audit(
+                db,
+                action="retention.purge",
+                entity_type="militante",
+                meta={
+                    "pass": "post_election",
+                    "count": militante_post_count,
+                    "campaign_ids": eligible_campaign_ids,
+                    "cutoff_days": settings.RETENTION_DAYS_AFTER_ELECTION,
+                },
+            )
+
+    result.militantes_post_election_purged = militante_post_count
 
     # ── Commit (single transaction for both passes) ───────────────────────────
     if not dry_run and result.total_purged > 0:

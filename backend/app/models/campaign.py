@@ -35,6 +35,7 @@ class Campaign(UUIDMixin, TenantMixin, AuditMixin, Base):
     license_tier: Mapped[LicenseTier] = mapped_column(
         Enum(LicenseTier, name="license_tier"), default=LicenseTier.STANDARD, nullable=False
     )
+    meta_afiliacion: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
 
 class Contest(UUIDMixin, TenantMixin, AuditMixin, CampaignMixin, Base):
