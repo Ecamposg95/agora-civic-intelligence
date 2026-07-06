@@ -96,8 +96,29 @@ def upgrade() -> None:
     if not _column_exists("campaigns", "meta_afiliacion"):
         op.add_column("campaigns", sa.Column("meta_afiliacion", sa.Integer(), nullable=True))
 
+    # Generalize privacy_acceptances so it can reference a militante, not only a
+    # registro: add nullable militante_id (plain column, no FK — trail survives
+    # hard-delete) and relax registro_id NOT NULL.
+    if _table_exists("privacy_acceptances"):
+        if not _column_exists("privacy_acceptances", "militante_id"):
+            op.add_column("privacy_acceptances", sa.Column("militante_id", sa.String(36), nullable=True))
+            if not _index_exists("privacy_acceptances", "ix_privacy_acceptances_militante_id"):
+                op.create_index("ix_privacy_acceptances_militante_id", "privacy_acceptances", ["militante_id"])
+        # Drop NOT NULL on registro_id. Postgres does a simple ALTER; SQLite's
+        # create_all path already has it nullable via the model, so skip there.
+        if op.get_bind().dialect.name == "postgresql":
+            reg = next((c for c in _insp().get_columns("privacy_acceptances")
+                        if c["name"] == "registro_id"), None)
+            if reg is not None and not reg["nullable"]:
+                op.alter_column("privacy_acceptances", "registro_id",
+                                existing_type=sa.String(36), nullable=True)
+
 
 def downgrade() -> None:
+    if _column_exists("privacy_acceptances", "militante_id"):
+        if _index_exists("privacy_acceptances", "ix_privacy_acceptances_militante_id"):
+            op.drop_index("ix_privacy_acceptances_militante_id", table_name="privacy_acceptances")
+        op.drop_column("privacy_acceptances", "militante_id")
     if _column_exists("campaigns", "meta_afiliacion"):
         op.drop_column("campaigns", "meta_afiliacion")
     if _table_exists("militantes"):

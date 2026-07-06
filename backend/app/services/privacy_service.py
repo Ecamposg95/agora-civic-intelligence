@@ -111,15 +111,18 @@ def publish_notice(db: Session, ctx: TenantContext, version: str, body: str) -> 
 
 
 def record_acceptance(
-    db: Session, ctx: TenantContext, registro: Registro, notice: PrivacyNotice
+    db: Session, ctx: TenantContext, entity, notice: PrivacyNotice
 ) -> PrivacyAcceptance:
-    """Create an immutable acceptance record for a registro + notice pair.
+    """Create an immutable acceptance record for a registro OR militante + notice.
 
-    The caller is responsible for the transaction boundary (commit).
-    Records a privacy.accept audit entry.
+    ``entity`` is a Registro or a Militante. The acceptance links to whichever
+    via ``registro_id`` / ``militante_id`` (exactly one is set). The caller
+    owns the transaction boundary (commit). Records a privacy.accept audit entry.
     """
+    is_militante = getattr(type(entity), "__tablename__", "") == "militantes"
     acceptance = PrivacyAcceptance(
-        registro_id=registro.id,
+        registro_id=None if is_militante else entity.id,
+        militante_id=entity.id if is_militante else None,
         notice_id=notice.id,
         aviso_version=notice.version,
     )
@@ -130,6 +133,6 @@ def record_acceptance(
         actor_id=ctx.user.id,
         organization_id=ctx.organization_id,
         entity_type="privacy_acceptance",
-        entity_id=registro.id,
+        entity_id=entity.id,
     )
     return acceptance
