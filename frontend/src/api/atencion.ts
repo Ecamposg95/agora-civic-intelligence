@@ -79,6 +79,7 @@ export interface CasoEvento {
   texto?: string;
   evidencia_url?: string;
   actor_nombre?: string;
+  created_at: string;
 }
 
 // CasoPanorama: aggregate dashboard view of casos
@@ -90,11 +91,11 @@ export interface CasoPanorama {
     atendidos: number;
     cerrados: number;
     sla_vencidos: number;
-    tiempo_prom_dias: number;
+    tiempo_prom_dias?: number;
   };
   por_estado: Record<string, number>;
-  por_colonia: Array<{ colonia: string; count: number }>;
-  por_responsable: Array<{ responsable: string; count: number }>;
+  por_colonia: Array<{ colonia: string; casos: number }>;
+  por_responsable: Array<{ asignado_a?: string; nombre: string; casos: number; pendientes: number }>;
 }
 
 // ============================================================================
@@ -153,7 +154,11 @@ export async function addEvento(id: string, evento: Record<string, unknown>): Pr
   return (await apiClient.post(`/casos/${id}/eventos`, evento)).data;
 }
 
-export async function uploadCasoEvidencia(id: string, blob: Blob): Promise<Caso> {
+export async function listEventos(casoId: string): Promise<CasoEvento[]> {
+  return (await apiClient.get(`/casos/${casoId}/eventos`)).data;
+}
+
+export async function uploadCasoEvidencia(id: string, blob: Blob): Promise<{ evidencia_key: string }> {
   const fd = new FormData();
   fd.append("file", blob, "evidencia");
   return (await apiClient.post(`/casos/${id}/evidencia`, fd, {
