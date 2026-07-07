@@ -3,7 +3,7 @@ const RAMP = "linear-gradient(90deg, #062a30 0%, #0e7490 28%, #22d3ee 64%, #67e8
 
 export function Legend({ label }: { label: string }) {
   return (
-    <div className="animate-fade-up absolute bottom-3 left-3 z-10 w-44 rounded-xl border border-line-strong/70 bg-panel/70 px-3 py-2.5 shadow-glow backdrop-blur-md">
+    <div className="reveal absolute bottom-3 left-3 z-10 w-44 rounded-xl border border-line-strong/70 bg-panel/70 px-3 py-2.5 shadow-glow backdrop-blur-md">
       <div className="mb-2 flex items-center justify-between">
         <span className="eyebrow !tracking-[0.16em] text-ink-muted">{label}</span>
         <span className="pill border-teal/30 bg-teal/10 !px-1.5 !py-0.5 text-[9px] text-teal">
