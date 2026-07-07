@@ -42,4 +42,13 @@ describe("ChartFrame", () => {
     );
     expect(html).toContain("chart-body");
   });
+
+  it("applies className prop to the root element", () => {
+    const html = renderToStaticMarkup(
+      <ChartFrame title="Casos" className="print:bg-white">
+        <svg />
+      </ChartFrame>,
+    );
+    expect(html).toContain("print:bg-white");
+  });
 });

@@ -97,12 +97,12 @@ function makeMuniColumns(): Column<AreaFeature>[] {
 const NACIONAL_SORT_OPTIONS: { id: NacionalSort; label: string }[] = [
   { id: "name", label: "Nombre" },
   { id: "count", label: "Municipios" },
-  { id: "metric", label: "Métrica" },
+  { id: "metric", label: "Cobertura" },
 ];
 
 const ESTADO_SORT_OPTIONS: { id: EstadoSort; label: string }[] = [
   { id: "name", label: "Nombre" },
-  { id: "metric", label: "Métrica" },
+  { id: "metric", label: "Cobertura" },
 ];
 
 // ---- Main component ----

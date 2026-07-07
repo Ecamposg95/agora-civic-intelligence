@@ -210,6 +210,7 @@ function Briefing({ overview, stateCount }: BriefingProps) {
                 : undefined
             }
             empty={overview.coverage.length === 0}
+            className="print:bg-white print:text-black print:border print:border-black/20"
           >
             <Bars
               items={overview.coverage.map((c) => ({
@@ -226,6 +227,7 @@ function Briefing({ overview, stateCount }: BriefingProps) {
             title="Tendencia de actividad"
             caption="Eventos por periodo"
             empty={overview.trends.activity.length === 0}
+            className="print:bg-white print:text-black print:border print:border-black/20"
           >
             <AreaTrend
               points={overview.trends.activity.map((p) => ({
@@ -248,6 +250,7 @@ function Briefing({ overview, stateCount }: BriefingProps) {
           <ChartFrame
             title="Acciones principales"
             empty={overview.by_action.length === 0}
+            className="print:bg-white print:text-black print:border print:border-black/20"
           >
             <Bars
               items={overview.by_action.map((a) => ({
@@ -261,6 +264,7 @@ function Briefing({ overview, stateCount }: BriefingProps) {
           <ChartFrame
             title="Actores principales"
             empty={overview.by_actor.length === 0}
+            className="print:bg-white print:text-black print:border print:border-black/20"
           >
             <Bars
               items={overview.by_actor.map((a) => ({

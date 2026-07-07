@@ -10,13 +10,14 @@ interface ChartFrameProps {
   empty?: boolean;
   loading?: boolean;
   children: ReactNode;
+  className?: string;
 }
 
 /** Themed card wrapper shared by every Atenea chart: title/caption header,
  * empty/loading states, and an optional legend row. */
-export function ChartFrame({ title, caption, legend, empty, loading, children }: ChartFrameProps) {
+export function ChartFrame({ title, caption, legend, empty, loading, children, className }: ChartFrameProps) {
   return (
-    <div className="card-premium reveal p-5">
+    <div className={`card-premium reveal p-5 ${className ?? ""}`}>
       <div className="flex items-baseline justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold tracking-tight text-ink">{title}</h3>
