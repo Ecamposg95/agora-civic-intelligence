@@ -50,8 +50,8 @@ const TONE: Record<
   warning: {
     text: "text-state-warning",
     glow: "shadow-glow",
-    stroke: "var(--chart-2)",
-    fill: "color-mix(in srgb, var(--chart-2) 28%, transparent)",
+    stroke: "rgb(var(--c-amber))",
+    fill: "color-mix(in srgb, rgb(var(--c-amber)) 28%, transparent)",
   },
   critical: {
     text: "text-state-critical",
