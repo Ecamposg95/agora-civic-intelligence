@@ -14,8 +14,10 @@ from app.services.form_schema import SchemaInvalid
 
 router = APIRouter(tags=["forms"])
 
-# Builder (create/list/get/update) is COORDINADOR+ only — form design is a
-# supervisory operation, unlike the /slug lookup used by capture-tier clients.
+# Form design (create/get/update/delete) is COORDINADOR+ only — a supervisory
+# operation. Listing form definitions is allowed for capture-tier clients so
+# field users can see which forms are available to fill (definitions carry no
+# PII); the /slug lookup is likewise capture-tier.
 _BUILDER = Annotated[object, Depends(require_roles(UserRole.COORDINADOR, UserRole.ADMIN))]
 _CAPTURE = Annotated[object, Depends(require_roles(
     UserRole.ACTIVISTA, UserRole.CAPTURISTA, UserRole.LIDER,
@@ -44,7 +46,7 @@ def create(db: DbSession, ctx: CampaignCtx, _p: _BUILDER, data: FormDefinitionCr
 
 
 @router.get("/forms", response_model=FormDefinitionList)
-def list_(db: DbSession, ctx: CampaignCtx, _p: _BUILDER,
+def list_(db: DbSession, ctx: CampaignCtx, _p: _CAPTURE,
           tipo: Annotated[Optional[str], Query()] = None,
           canal: Annotated[Optional[str], Query()] = None,
           is_active: Annotated[Optional[bool], Query()] = None,

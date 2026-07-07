@@ -224,7 +224,7 @@ export function FormBuilderPage() {
     secciones.forEach((sec, si) => {
       sec.campos.forEach((f, fi) => {
         if (si < sectionIdx || (si === sectionIdx && fi < fieldIdx)) {
-          out.push({ key: f.key, label: f.label, opciones: f.opciones });
+          out.push({ key: f.key, label: f.label, tipo: f.tipo, opciones: f.opciones });
         }
       });
     });

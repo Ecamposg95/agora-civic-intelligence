@@ -103,7 +103,9 @@ export interface CasoPanorama {
 // ============================================================================
 
 export async function listForms(params: Record<string, string | number | undefined> = {}): Promise<FormDefinition[]> {
-  return (await apiClient.get("/forms", { params })).data;
+  // GET /forms returns a paginated envelope { items, total, limit, offset };
+  // callers consume a plain array, so unwrap .items here.
+  return (await apiClient.get("/forms", { params })).data.items;
 }
 
 export async function getForm(id: string): Promise<FormDefinition> {

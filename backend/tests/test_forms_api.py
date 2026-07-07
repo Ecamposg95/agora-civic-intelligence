@@ -37,12 +37,15 @@ def test_reject_bad_schema(client):
     assert r.status_code == 422, r.text
 
 
-def test_activista_cannot_create_or_list(client):
+def test_activista_cannot_create_but_can_list(client):
+    # Form design (create) is COORDINADOR+; listing definitions is capture-tier
+    # so field users can see which forms are available to fill.
     h = _hdr(client, "activista1@alpha.gov")
     r = client.post("/api/forms", headers=h, json=_payload(slug="peticion-forbidden"))
     assert r.status_code == 403
     lst = client.get("/api/forms", headers=h)
-    assert lst.status_code == 403
+    assert lst.status_code == 200, lst.text
+    assert "items" in lst.json()
 
 
 def test_get_by_slug_is_capture_tier(client):

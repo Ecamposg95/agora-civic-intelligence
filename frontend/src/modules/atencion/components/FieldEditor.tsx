@@ -38,8 +38,15 @@ function keyify(value: string): string {
 export interface EarlierField {
   key: string;
   label: string;
+  tipo: string;
   opciones?: string[];
 }
+
+// A `mostrar_si` rule compares `value[campo] === igual` where `igual` is always a
+// string. Boolean answers are JS booleans, multiselect answers are arrays, and
+// foto answers are blobs — none can ever equal a string, so a condition targeting
+// them is permanently unsatisfiable. Exclude them as condition targets.
+const UNCONDITIONABLE_TYPES = new Set(["boolean", "multiselect", "foto"]);
 
 interface FieldEditorProps {
   field: FormField;
@@ -82,6 +89,8 @@ export function FieldEditor({
   }
 
   const condTarget = earlierFields.find((f) => f.key === field.mostrar_si?.campo);
+  // Only string-valued earlier fields can be condition targets (see UNCONDITIONABLE_TYPES).
+  const conditionable = earlierFields.filter((f) => !UNCONDITIONABLE_TYPES.has(f.tipo));
 
   function setCondCampo(campo: string): void {
     if (!campo) {
@@ -245,11 +254,11 @@ export function FieldEditor({
               <select
                 value={field.mostrar_si?.campo ?? ""}
                 onChange={(e) => setCondCampo(e.target.value)}
-                disabled={earlierFields.length === 0}
+                disabled={conditionable.length === 0}
                 className="field-input w-full text-sm disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <option value="">Sin condición</option>
-                {earlierFields.map((f) => (
+                {conditionable.map((f) => (
                   <option key={f.key} value={f.key}>
                     {f.label || f.key}
                   </option>
@@ -279,9 +288,11 @@ export function FieldEditor({
                   />
                 ))}
             </div>
-            {earlierFields.length === 0 && (
+            {conditionable.length === 0 && (
               <p className="mt-1.5 text-xs text-ink-faint">
-                Agrega este campo después de otro para poder condicionarlo.
+                {earlierFields.length === 0
+                  ? "Agrega este campo después de otro para poder condicionarlo."
+                  : "Ningún campo anterior puede usarse como condición (los de Sí/No, selección múltiple y foto no son válidos)."}
               </p>
             )}
           </div>

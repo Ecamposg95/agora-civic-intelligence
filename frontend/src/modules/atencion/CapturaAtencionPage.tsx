@@ -33,6 +33,19 @@ import { scanIne, type IneFields } from "./lib/ocr";
 
 const OCR_KEYS: (keyof IneFields)[] = ["nombre", "curp", "clave", "seccion", "domicilio"];
 
+// OCR yields free-text strings. Only prefill fields whose control accepts a
+// string — injecting into a select/multiselect/boolean/foto field would corrupt
+// its value until the user re-edits it.
+const OCR_PREFILLABLE_TYPES = new Set([
+  "text",
+  "textarea",
+  "number",
+  "date",
+  "phone",
+  "email",
+  "seccion",
+]);
+
 function isEligible(f: FormDefinition): boolean {
   return f.is_active && (f.canal === "INTERNO" || f.canal === "AMBOS");
 }
@@ -120,6 +133,7 @@ export default function CapturaAtencionPage() {
           if (!value) continue;
           const target = allFields.find((f) => f.key === key);
           if (!target) continue;
+          if (!OCR_PREFILLABLE_TYPES.has(target.tipo)) continue;
           patch[key] = value;
           labels.push(target.label);
         }
