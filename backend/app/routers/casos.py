@@ -113,6 +113,14 @@ async def upload_evidencia(db: DbSession, ctx: CampaignCtx, _p: _CAPTURE, cid: s
     return CasoEvidenciaUploadRead(evidencia_key=key)
 
 
+@router.get("/casos/{cid}/eventos", response_model=list[CasoEventoRead])
+def list_eventos(db: DbSession, ctx: CampaignCtx, _p: _CAPTURE, cid: str):
+    eventos = caso_service.list_eventos(db, ctx, cid)
+    if eventos is None:
+        raise HTTPException(status_code=404, detail="Caso no encontrado")
+    return [CasoEventoRead.model_validate(e, from_attributes=True) for e in eventos]
+
+
 @router.post("/casos/{cid}/eventos", response_model=CasoEventoRead, status_code=status.HTTP_201_CREATED)
 def add_evento(db: DbSession, ctx: CampaignCtx, _p: _CAPTURE, cid: str, data: CasoEventoCreate):
     try:

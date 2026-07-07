@@ -422,6 +422,34 @@ def add_evento(db: Session, ctx: CampaignContext, cid: str, tipo: str, *,
     return evento
 
 
+def list_eventos(db: Session, ctx: CampaignContext, cid: str) -> Optional[list[CasoEvento]]:
+    """Full bitácora for a caso, oldest→newest (chronological display order —
+    the opposite of add_evento's session-only newest-first client timeline).
+
+    Scoped via ``get_caso`` so a caso outside the caller's role/territory scope
+    yields None (the router 404s), same as get/set_estado/asignar. Enriches
+    each event with ``actor_nombre`` and a freshly presigned ``evidencia_url``,
+    mirroring the fields the POST /eventos response already carries.
+    """
+    caso = get_caso(db, ctx, cid)
+    if caso is None:
+        return None
+    eventos = list(db.execute(
+        select(CasoEvento)
+        .where(CasoEvento.caso_id == caso.id)
+        .order_by(CasoEvento.created_at.asc())
+    ).scalars().all())
+    ids = {e.actor_id for e in eventos if e.actor_id}
+    names: dict[str, str] = {}
+    if ids:
+        for uid, fname in db.execute(select(User.id, User.full_name).where(User.id.in_(ids))).all():
+            names[uid] = fname
+    for e in eventos:
+        e.actor_nombre = names.get(e.actor_id)
+        e.evidencia_url = evidencia_url(e.evidencia_key)
+    return eventos
+
+
 def subir_evidencia(db: Session, ctx: CampaignContext, cid: str,
                     data: bytes, content_type: str) -> Optional[str]:
     """Upload a case-evidence object to the bucket under

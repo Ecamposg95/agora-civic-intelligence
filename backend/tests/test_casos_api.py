@@ -202,6 +202,34 @@ def test_evidencia_upload_requires_existing_caso(client, monkeypatch):
     assert up.status_code == 404
 
 
+def test_list_eventos_returns_bitacora(client):
+    _ensure_coord_territory_4127()
+    h = _hdr(client, "coord@alpha.gov")
+    cid = _open_caso(client, h, "pet-list-eventos-test")
+
+    created = client.post(f"/api/casos/{cid}/eventos", headers=h,
+                           json={"tipo": "NOTA", "texto": "seguimiento inicial"})
+    assert created.status_code == 201, created.text
+
+    listado = client.get(f"/api/casos/{cid}/eventos", headers=h)
+    assert listado.status_code == 200, listado.text
+    body = listado.json()
+    assert isinstance(body, list)
+    # the opening CAMBIO_ESTADO → PENDIENTE event plus the NOTA just added
+    assert len(body) >= 2
+    nota = next(e for e in body if e["tipo"] == "NOTA")
+    assert nota["texto"] == "seguimiento inicial"
+    assert nota["caso_id"] == cid
+    # chronological (oldest first): the opening event precedes the NOTA
+    assert body[0]["tipo"] == "CAMBIO_ESTADO"
+
+
+def test_list_eventos_requires_existing_caso(client):
+    h = _hdr(client, "coord@alpha.gov")
+    r = client.get("/api/casos/does-not-exist/eventos", headers=h)
+    assert r.status_code == 404
+
+
 def test_evento_rejects_foreign_evidencia_key(client):
     _ensure_coord_territory_4127()
     h = _hdr(client, "coord@alpha.gov")
