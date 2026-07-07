@@ -1,20 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { getAreas } from "@/api/maps";
-import { StackedBars } from "@/components/charts/StackedBars";
+import { Bars } from "@/components/charts/Bars";
+import { ChartFrame } from "@/components/charts/ChartFrame";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { MapCanvas } from "@/components/maps/MapCanvas";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
-import { Card } from "@/components/ui/Card";
+import { CellBar } from "@/components/ui/CellBar";
 import type { Column } from "@/components/ui/DataTable";
 import { DataTable } from "@/components/ui/DataTable";
 import { DataState } from "@/components/ui/DataState";
 import { MetricCard } from "@/components/ui/MetricCard";
+import { SectionHeading } from "@/components/ui/SectionHeading";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SkeletonRows } from "@/components/ui/SkeletonCard";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { LayersIcon, MapIcon, SearchIcon } from "@/components/ui/icons";
-import { CHART_PALETTE, PANEL_HEIGHTS } from "@/constants/ui";
+import { PANEL_HEIGHTS } from "@/constants/ui";
 import { useAsync } from "@/hooks/useAsync";
 import type { AreaFeature, AreaProperties, AreasResponse } from "@/types/maps";
 import { sampleMetric } from "@/types/maps";
@@ -54,13 +57,11 @@ const STATE_COLUMNS: Column<StateGroup>[] = [
   },
   {
     key: "metric",
-    header: "Métrica",
+    header: "Cobertura",
     align: "right",
     hideOnCard: true,
     sortValue: (r) => r.metric,
-    render: (r) => (
-      <span className="font-mono tabular-nums text-ink-muted">{pct(r.metric)}</span>
-    ),
+    render: (r) => <CellBar value={r.metric * 100} />,
   },
 ];
 
@@ -85,12 +86,10 @@ function makeMuniColumns(): Column<AreaFeature>[] {
     },
     {
       key: "metric",
-      header: "Métrica",
+      header: "Cobertura",
       align: "right",
       sortValue: (f) => sampleMetric(f.properties.id),
-      render: (f) => (
-        <span className="font-mono tabular-nums text-teal">{pct(sampleMetric(f.properties.id))}</span>
-      ),
+      render: (f) => <CellBar value={sampleMetric(f.properties.id) * 100} />,
     },
   ];
 }
@@ -329,11 +328,20 @@ export function TerritoriosPage() {
             value={selectedState ? "—" : "0"}
             countTo={selectedState ? stateMunicipios.length : 0}
             icon={<MapIcon width={18} height={18} />}
-            tone="warning"
+            tone="warm"
+            context={selectedState ? undefined : "Selecciona un estado en el mapa o la lista"}
             delay={200}
           />
         </div>
       </DataState>
+
+      <div className="reveal mb-3" style={{ animationDelay: "100ms" }}>
+        <SectionHeading
+          eyebrow="Territorio"
+          title="Mapa & listado"
+          note={selectedState ?? "Nacional"}
+        />
+      </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_400px]">
         {/* LEFT — scoped map */}
@@ -465,10 +473,11 @@ export function TerritoriosPage() {
 
           {/* Distrito / Sección levels — honest "Ingesta pendiente" empty state */}
           {selectedState && (
-            <div className="border-t border-line px-4 py-2.5">
+            <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2.5">
+              <StatusPill kind="warn">Ingesta pendiente</StatusPill>
               <p className="text-[11px] text-ink-faint">
                 <span className="font-semibold text-ink-muted">Distritos · Secciones:</span>{" "}
-                Ingesta pendiente — cartografía a nivel distrito/sección no disponible aún.
+                cartografía a nivel distrito/sección no disponible aún.
               </p>
             </div>
           )}
@@ -486,28 +495,29 @@ export function TerritoriosPage() {
             <div className="mt-4 h-48 animate-pulse rounded-card bg-panel-hover" />
           }
         >
-          <Card
-            title="Estados con más municipios"
-            accentDot
-            className="reveal mt-4"
-          >
-            <p className="mb-3 -mt-2 text-xs text-ink-muted">
-              Conteo real de municipios por estado (top 8) — derivado de{" "}
-              <span className="font-mono text-ink">
-                <AnimatedNumber
-                  value={muniFeatures.length}
-                  className="tabular-nums"
-                />
-              </span>{" "}
-              municipios reales.
-            </p>
-            <StackedBars
-              data={topStates}
-              xKey="name"
-              height={180}
-              series={[{ key: "count", color: CHART_PALETTE[0] }]}
+          <div className="mt-4">
+            <SectionHeading
+              eyebrow="Distribución"
+              title="Municipios por estado"
+              note={`Top ${topStates.length}`}
             />
-          </Card>
+            <ChartFrame title="Estados con más municipios">
+              <p className="mb-3 text-xs text-ink-muted">
+                Conteo real de municipios por estado (top 8) — derivado de{" "}
+                <span className="font-mono text-ink">
+                  <AnimatedNumber
+                    value={muniFeatures.length}
+                    className="tabular-nums"
+                  />
+                </span>{" "}
+                municipios reales.
+              </p>
+              <Bars
+                items={topStates.map((g) => ({ label: g.name, value: g.count }))}
+                highlightFirst
+              />
+            </ChartFrame>
+          </div>
         </DataState>
       )}
 
