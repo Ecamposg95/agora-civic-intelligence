@@ -109,6 +109,44 @@ def test_get_public_form_404_when_missing(client):
     assert r.status_code == 404
 
 
+def test_get_public_form_404_when_inactive(client):
+    """An is_active=False public form must not resolve on the public channel."""
+    h = _hdr(client, "coord@alpha.gov")
+    f = client.post("/api/forms", headers=h, json=_form_payload("pub-inactive")).json()
+
+    db = TestingSessionLocal()
+    try:
+        form = db.get(FormDefinition, f["id"])
+        form.is_active = False
+        db.commit()
+    finally:
+        db.close()
+
+    with _enabled():
+        r = client.get("/api/public/forms/pub-inactive")
+    assert r.status_code == 404
+
+
+def test_get_public_form_404_when_soft_deleted(client):
+    """A soft-deleted (deleted_at set) public form must not resolve."""
+    from datetime import datetime, timezone
+
+    h = _hdr(client, "coord@alpha.gov")
+    f = client.post("/api/forms", headers=h, json=_form_payload("pub-deleted")).json()
+
+    db = TestingSessionLocal()
+    try:
+        form = db.get(FormDefinition, f["id"])
+        form.deleted_at = datetime.now(timezone.utc)
+        db.commit()
+    finally:
+        db.close()
+
+    with _enabled():
+        r = client.get("/api/public/forms/pub-deleted")
+    assert r.status_code == 404
+
+
 def test_post_public_response_creates_response_and_caso(client):
     h = _hdr(client, "coord@alpha.gov")
     r = client.post("/api/forms", headers=h, json=_form_payload("pub-post"))

@@ -77,13 +77,22 @@ def _guard_enabled() -> None:
 
 
 def _resolve_public_form(db: Session, slug: str) -> Optional[FormDefinition]:
-    """Resolve an active, public-channel form by slug, across all tenants."""
+    """Resolve a live, active, public-channel form by slug, across all tenants.
+
+    ``slug`` is only unique per-campaign (uq_form_definitions_campaign_slug), so a
+    global public lookup can match forms from more than one org. Until public-slug
+    GLOBAL uniqueness is introduced, cross-org slug collisions are resolved
+    DETERMINISTICALLY to the OLDEST active public form (order_by created_at) — an
+    acceptable, stable tie-break. Soft-deleted, inactive, and non-public
+    (INTERNO-only) forms are excluded so they are invisible on the public channel.
+    """
     return db.execute(
         select(FormDefinition).where(
             FormDefinition.slug == slug,
+            FormDefinition.deleted_at.is_(None),
             FormDefinition.is_active.is_(True),
             FormDefinition.canal.in_(_PUBLIC_CANALES),
-        )
+        ).order_by(FormDefinition.created_at)
     ).scalars().first()
 
 

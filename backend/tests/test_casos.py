@@ -7,7 +7,10 @@ isolated between tests.
 """
 import pytest
 
+from app.core.security import hash_password
 from app.models.atencion import Caso, CasoEvento, FormDefinition, FormResponse
+from app.models.electoral_area import AreaLevel, ElectoralArea
+from app.models.user import User, UserRole
 from app.services import caso_service
 from tests.conftest import ALPHA_CAMPAIGN_ID, TestingSessionLocal
 
@@ -103,7 +106,86 @@ def test_crear_desde_respuesta_maps_and_links(coordinador_ctx, db_session):
     assert resp.caso_id == caso.id
 
 
+def test_crear_desde_respuesta_exact_mapping_no_substring_bleed(coordinador_ctx, db_session):
+    """A `detalle` field maps to descripcion and, with NO phone field present,
+    must NOT bleed into contacto (regression: substring match let `tel` swallow
+    `detalle`, corrupting PII + the mask)."""
+    form = FormDefinition(
+        organization_id=coordinador_ctx.organization_id, campaign_id=ALPHA_CAMPAIGN_ID,
+        nombre="Reporte", tipo="PETICION", slug="reporte-detalle", canal="PUBLICO",
+        schema={"fields": []})
+    db_session.add(form)
+    db_session.flush()
+    resp = FormResponse(
+        organization_id=coordinador_ctx.organization_id, campaign_id=ALPHA_CAMPAIGN_ID,
+        form_definition_id=form.id,
+        answers={"nombre": "Lola", "seccion": "4127", "detalle": "Poste caído en la esquina"},
+        channel="INTERNO", moderacion="VERIFICADO")
+    db_session.add(resp)
+    db_session.flush()
+
+    caso = caso_service.crear_desde_respuesta(db_session, coordinador_ctx, resp, form)
+    assert caso.descripcion == "Poste caído en la esquina"
+    assert caso.contacto_enc is None
+    assert caso.contacto_masked is None
+
+
+# ── Auto-routing specificity ──────────────────────────────────────────────────
+def test_resolve_responsable_prefers_most_specific_territory(activista_ctx, db_session):
+    """Among users whose territory covers the sección, the SMALLEST territory
+    wins (an activista pinned to one sección over a coordinator covering a
+    municipio), independent of row order."""
+    org = activista_ctx.organization_id
+    muni = ElectoralArea(name="Muni AC", code="MAC", level=AreaLevel.MUNICIPIO,
+                         organization_id=org)
+    db_session.add(muni)
+    db_session.flush()
+    s_narrow = ElectoralArea(name="S7777", code="7777", level=AreaLevel.SECCION,
+                             organization_id=org, municipio_id=muni.id)
+    s_other = ElectoralArea(name="S7778", code="7778", level=AreaLevel.SECCION,
+                            organization_id=org, municipio_id=muni.id)
+    db_session.add_all([s_narrow, s_other])
+    db_session.flush()
+
+    broad = User(email="broad-ac@alpha.gov", full_name="Broad AC",
+                 hashed_password=hash_password("x"), role=UserRole.COORDINADOR,
+                 organization_id=org, area_id=muni.id)
+    narrow = User(email="narrow-ac@alpha.gov", full_name="Narrow AC",
+                  hashed_password=hash_password("x"), role=UserRole.ACTIVISTA,
+                  organization_id=org, area_id=s_narrow.id)
+    db_session.add_all([broad, narrow])
+    db_session.commit()
+    try:
+        assert caso_service._resolve_responsable(db_session, activista_ctx, "7777") == narrow.id
+    finally:
+        db_session.query(User).filter(User.id.in_([broad.id, narrow.id])).delete(
+            synchronize_session=False)
+        db_session.query(ElectoralArea).filter(
+            ElectoralArea.id.in_([muni.id, s_narrow.id, s_other.id])).delete(
+            synchronize_session=False)
+        db_session.commit()
+
+
 # ── Scoping ───────────────────────────────────────────────────────────────────
+def test_coordinador_sees_hierarchy_team_caso(coordinador_ctx, activista_ctx, db_session):
+    """A caso auto-routed to a SUBORDINATE activista (not created_by/assigned to
+    the coordinator) but inside the coordinator's territory is visible to the
+    coordinator on list + get (oversight of the team's in-territory work)."""
+    caso = Caso(
+        organization_id=coordinador_ctx.organization_id, campaign_id=ALPHA_CAMPAIGN_ID,
+        folio="AC-2026-09001", tipo="PETICION", titulo="Equipo",
+        seccion="4127", estado="PENDIENTE",
+        asignado_a=activista_ctx.user.id, created_by=activista_ctx.user.id)
+    db_session.add(caso)
+    db_session.commit()
+    db_session.refresh(caso)
+
+    rows, total, _ = caso_service.list_casos(db_session, coordinador_ctx)
+    assert any(r.id == caso.id for r in rows)
+    assert caso_service.get_caso(db_session, coordinador_ctx, caso.id) is not None
+
+
+
 def test_list_scoped_activista_cannot_see_others(coordinador_ctx, activista_ctx, db_session):
     caso_service.crear_directo(db_session, coordinador_ctx, _base_data())
     # coordinator (territory 4127 + owner) sees it

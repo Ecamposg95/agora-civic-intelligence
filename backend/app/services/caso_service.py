@@ -87,11 +87,15 @@ def _flush_with_folio_retry(db: Session, ctx: CampaignContext, c: Caso) -> None:
 
 # ── Territorial auto-routing ───────────────────────────────────────────────────
 def _resolve_responsable(db: Session, ctx: CampaignContext, seccion: Optional[str]) -> Optional[str]:
-    """Return the id of a user whose assigned territory covers ``seccion``.
+    """Return the id of the user whose assigned territory MOST specifically
+    covers ``seccion``.
 
     Fallback None → the caso lands in the coordinator (unassigned) queue. Scans
-    org users with an assigned area_id and returns the first whose resolved
-    secciones contain the caso's sección.
+    org users with an assigned area_id and, among those whose resolved secciones
+    contain the caso's sección, prefers the SMALLEST territory (an activista
+    pinned to a single sección wins over a coordinator covering a whole
+    municipio). Ties break deterministically by ``user.id`` so routing is stable
+    regardless of row order.
     """
     if not seccion:
         return None
@@ -102,10 +106,16 @@ def _resolve_responsable(db: Session, ctx: CampaignContext, seccion: Optional[st
             User.deleted_at.is_(None),
         )
     ).scalars().all()
+    best: Optional[User] = None
+    best_size = -1
     for u in users:
-        if seccion in territory_service.scope_secciones(db, u):
-            return u.id
-    return None
+        secciones = territory_service.scope_secciones(db, u)
+        if seccion not in secciones:
+            continue
+        size = len(secciones)
+        if best is None or size < best_size or (size == best_size and u.id < best.id):
+            best, best_size = u, size
+    return best.id if best is not None else None
 
 
 # ── Create ─────────────────────────────────────────────────────────────────────
@@ -163,15 +173,22 @@ def crear_directo(db: Session, ctx: CampaignContext, data: dict) -> Caso:
     return c
 
 
-def _answer(answers: Optional[dict], *names: str):
-    """First non-empty answer whose key (case-insensitive) contains any of ``names``."""
+def _answer(answers: Optional[dict], *aliases: str):
+    """First non-empty answer whose key EXACTLY matches (case-insensitive) one of
+    ``aliases``, tried in alias order.
+
+    Exact equality — NOT substring — is deliberate: a substring match let a
+    ``tel`` alias swallow a ``detalle`` field, corrupting a form description into
+    the citizen's ``contacto`` (PII + a garbage mask). Match keys against
+    explicit alias lists only.
+    """
     if not answers:
         return None
     lowered = {str(k).lower(): v for k, v in answers.items()}
-    for n in names:
-        for k, v in lowered.items():
-            if n in k and v not in (None, ""):
-                return v
+    for alias in aliases:
+        v = lowered.get(alias.lower())
+        if v not in (None, ""):
+            return v
     return None
 
 
@@ -179,14 +196,14 @@ def crear_desde_respuesta(db: Session, ctx: CampaignContext, response, form) -> 
     """Materialize a caso from a public/form response using the key-convention
     mapping, then link both directions (caso.origin_response_id ↔ response.caso_id)."""
     answers = response.answers or {}
-    descripcion = _answer(answers, "descripcion", "detalle", "mensaje", "asunto")
+    descripcion = _answer(answers, "descripcion", "detalle")
     seccion = _answer(answers, "seccion") or response.seccion
     data = {
         "tipo": form.tipo,
         "titulo": _answer(answers, "titulo") or (descripcion or "")[:60],
         "descripcion": descripcion,
-        "ciudadano_nombre": _answer(answers, "nombre") or response.nombre_emisor,
-        "contacto": _answer(answers, "contacto", "tel", "celular", "whatsapp", "email", "correo"),
+        "ciudadano_nombre": _answer(answers, "nombre", "ciudadano_nombre") or response.nombre_emisor,
+        "contacto": _answer(answers, "contacto", "tel", "telefono", "celular", "email", "correo"),
         "seccion": seccion,
         "colonia": _answer(answers, "colonia"),
         "channel": response.channel,
@@ -206,17 +223,37 @@ def _caso_role_scoped(ctx: CampaignContext):
     """Role scope for casos. own = assigned-to-me OR created-by-me.
 
     - SUPERADMIN / ADMIN → whole campaign.
-    - COORDINADOR / LIDER → own OR unassigned rows (the sección territory gate in
-      _territory_gated is the real restriction).
+    - COORDINADOR / LIDER → the SUPERVISORY HIERARCHY (mirrors
+      ``militante_service._militante_role_scoped``) OR unassigned rows. Because
+      territorial auto-routing assigns casos to subordinate activistas (not to
+      the supervisor), scoping only to "own OR unassigned" would hide a
+      supervisor's own team's in-territory casos from list/get/panorama — the
+      hierarchy keys on both ``asignado_a`` AND ``created_by`` restore oversight.
+      The sección territory gate in ``_territory_gated`` remains the real limit.
     - ACTIVISTA / CAPTURISTA → own rows only.
     - everyone else → nothing.
     """
     if ctx.is_superadmin or ctx.role == UserRole.ADMIN:
         return scoped_query(Caso, ctx)
-    owned = or_(Caso.asignado_a == ctx.user.id, Caso.created_by == ctx.user.id)
     if ctx.role in (UserRole.COORDINADOR, UserRole.LIDER):
-        return scoped_query(Caso, ctx).where(or_(owned, Caso.asignado_a.is_(None)))
+        if ctx.role == UserRole.COORDINADOR:
+            lideres = select(User.id).where(User.coordinador_id == ctx.user.id)
+            activistas = select(User.id).where(User.lider_id.in_(lideres))
+            hierarchy = or_(
+                Caso.asignado_a.in_(activistas), Caso.asignado_a.in_(lideres),
+                Caso.asignado_a == ctx.user.id,
+                Caso.created_by.in_(activistas), Caso.created_by.in_(lideres),
+                Caso.created_by == ctx.user.id,
+            )
+        else:  # LIDER
+            activistas = select(User.id).where(User.lider_id == ctx.user.id)
+            hierarchy = or_(
+                Caso.asignado_a.in_(activistas), Caso.asignado_a == ctx.user.id,
+                Caso.created_by.in_(activistas), Caso.created_by == ctx.user.id,
+            )
+        return scoped_query(Caso, ctx).where(or_(hierarchy, Caso.asignado_a.is_(None)))
     if ctx.role in (UserRole.ACTIVISTA, UserRole.CAPTURISTA):
+        owned = or_(Caso.asignado_a == ctx.user.id, Caso.created_by == ctx.user.id)
         return scoped_query(Caso, ctx).where(owned)
     return scoped_query(Caso, ctx).where(sa.false())
 
@@ -306,6 +343,18 @@ def asignar(db: Session, ctx: CampaignContext, cid: str, user_id: Optional[str],
     caso = get_caso(db, ctx, cid)
     if caso is None:
         return None
+    if user_id is not None:
+        # Target must be a live user in the same org/campaign — never assign a
+        # caso to an id from another tenant or a deleted user.
+        target = db.execute(
+            select(User.id).where(
+                User.id == user_id,
+                User.organization_id == ctx.organization_id,
+                User.deleted_at.is_(None),
+            )
+        ).scalar_one_or_none()
+        if target is None:
+            return None
     caso.asignado_a = user_id
     caso.updated_by = ctx.user.id
     db.add(CasoEvento(
@@ -395,13 +444,21 @@ def panorama(db: Session, ctx: CampaignContext) -> dict:
     resp_rows = db.execute(
         select(sub.c.asignado_a, func.count()).group_by(sub.c.asignado_a)
     ).all()
+    # Pendientes = non-terminal casos per responsable (same scoped subquery).
+    pend_rows = db.execute(
+        select(sub.c.asignado_a, func.count())
+        .where(sub.c.estado.notin_(_TERMINAL_ESTADOS))
+        .group_by(sub.c.asignado_a)
+    ).all()
+    pendientes = {a: c for a, c in pend_rows}
     rids = {a for a, _ in resp_rows if a}
     names: dict[str, str] = {}
     if rids:
         for uid, fn in db.execute(select(User.id, User.full_name).where(User.id.in_(rids))).all():
             names[uid] = fn
     por_responsable = [
-        {"asignado_a": a, "nombre": names.get(a, "—") if a else "Sin asignar", "casos": c}
+        {"asignado_a": a, "nombre": names.get(a, "—") if a else "Sin asignar",
+         "casos": c, "pendientes": pendientes.get(a, 0)}
         for a, c in sorted(resp_rows, key=lambda x: -x[1])
     ]
 
