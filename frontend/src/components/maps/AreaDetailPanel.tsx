@@ -17,7 +17,7 @@ export function AreaDetailPanel({ area, onClose, stateName }: Props) {
   if (!area) return null;
   const pct = Math.max(0, Math.min(1, area.metric)) * 100;
   return (
-    <div className="animate-fade-up absolute right-3 top-3 z-10 w-72 overflow-hidden rounded-xl border border-line-strong/70 bg-panel/75 p-4 shadow-glow-accent backdrop-blur-md">
+    <div className="reveal absolute right-3 top-3 z-10 w-72 overflow-hidden rounded-xl border border-line-strong/70 bg-panel/75 p-4 shadow-glow-accent backdrop-blur-md">
       {/* accent hairline */}
       <span
         aria-hidden="true"

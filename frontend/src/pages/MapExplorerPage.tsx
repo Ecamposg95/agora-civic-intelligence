@@ -9,8 +9,8 @@ import { AreaDetailPanel } from "@/components/maps/AreaDetailPanel";
 import { LayerPanel } from "@/components/maps/LayerPanel";
 import { Legend } from "@/components/maps/Legend";
 import { MapCanvas, type Basemap, type WmsOverlay } from "@/components/maps/MapCanvas";
-import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
-import { MapIcon, SearchIcon } from "@/components/ui/icons";
+import { MetricCard } from "@/components/ui/MetricCard";
+import { LayersIcon, MapIcon, SearchIcon } from "@/components/ui/icons";
 import type { AreaFeature, AreaProperties, AreasResponse, MapLayer } from "@/types/maps";
 import { sampleMetric } from "@/types/maps";
 
@@ -159,29 +159,28 @@ export function MapExplorerPage() {
         subtitle="Explora distritos, secciones y superficies analíticas. Activa capas gobernadas (incluyendo WMS del SIGE/INE) sobre el basemap institucional."
         actions={
           <>
-            <div className="card-premium px-4 py-3">
-              <div className="eyebrow mb-1.5">Áreas</div>
-              <div className="flex items-center gap-2">
-                <MapIcon className="h-5 w-5 text-accent" />
-                <AnimatedNumber
-                  value={stats.total}
-                  className="font-display text-2xl font-bold tabular-nums text-ink"
-                />
-              </div>
-            </div>
-            <div className="card-premium px-4 py-3">
-              <div className="eyebrow mb-1.5">Niveles</div>
-              <AnimatedNumber
-                value={stats.levels}
-                className="font-display text-2xl font-bold tabular-nums text-ink"
-              />
-            </div>
-            <div className="card-premium px-4 py-3">
-              <div className="eyebrow mb-1.5">Vista actual</div>
-              <div className="font-display text-base font-semibold text-teal">
-                {LEVEL_LABEL[level] ?? "—"}
-              </div>
-            </div>
+            <MetricCard
+              label="Áreas"
+              value={String(stats.total)}
+              countTo={stats.total}
+              tone="accent"
+              icon={<MapIcon className="h-[18px] w-[18px]" />}
+              delay={0}
+            />
+            <MetricCard
+              label="Niveles"
+              value={String(stats.levels)}
+              countTo={stats.levels}
+              tone="teal"
+              icon={<LayersIcon className="h-[18px] w-[18px]" />}
+              delay={80}
+            />
+            <MetricCard
+              label="Vista actual"
+              value={LEVEL_LABEL[level] ?? "—"}
+              tone="warm"
+              delay={160}
+            />
           </>
         }
       />
@@ -255,7 +254,7 @@ export function MapExplorerPage() {
                 className="field-input !py-2 pl-9"
               />
               {searchMatches.length > 0 && (
-                <ul className="animate-fade-up absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 max-h-64 overflow-auto rounded-lg border border-line-strong/70 bg-panel/95 p-1 shadow-glow backdrop-blur-md">
+                <ul className="reveal absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 max-h-64 overflow-auto rounded-lg border border-line-strong/70 bg-panel/95 p-1 shadow-glow backdrop-blur-md">
                   {searchMatches.map((f) => (
                     <li key={f.properties.id}>
                       <button
@@ -312,14 +311,17 @@ export function MapExplorerPage() {
 
               {/* REAL data panel: # municipios per state (not a sample). */}
               {stateRanking.length > 0 && (
-                <div className="animate-fade-up absolute left-3 top-3 z-10 w-60 overflow-hidden rounded-xl border border-line-strong/70 bg-panel/80 p-3 shadow-glow backdrop-blur-md">
+                <div className="reveal absolute left-3 top-3 z-10 w-60 overflow-hidden rounded-xl border border-line-strong/70 bg-panel/80 p-3 shadow-glow backdrop-blur-md">
                   <span
                     aria-hidden="true"
                     className="pointer-events-none absolute inset-x-0 top-0 h-px bg-accent-gradient opacity-70"
                   />
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="eyebrow !tracking-[0.14em] text-ink-muted">
-                      Estados por # municipios
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warm" aria-hidden="true" />
+                      <span className="eyebrow !tracking-[0.14em] text-ink-muted">
+                        Estados por # municipios
+                      </span>
                     </span>
                     <span className="pill border-accent/30 bg-accent/10 !px-1.5 !py-0.5 text-[9px] text-accent">
                       real
