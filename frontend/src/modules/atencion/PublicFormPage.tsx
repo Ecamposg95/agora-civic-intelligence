@@ -17,7 +17,7 @@ import { DynamicForm, validate } from "./components/DynamicForm";
  * slug is real. It is deliberately rendered OUTSIDE the authenticated
  * `AppLayout` shell (no sidebar/topbar, no JWT, no `X-Campaign-Id`) — see the
  * route registration in `App.tsx`. It therefore carries its own brand masthead
- * and backdrop so citizens land on something that reads as official Ágora.
+ * and backdrop so citizens land on something that reads as official Atenea.
  *
  * ANTI-ABUSE PENDING: the backend has no honeypot field or rate limiting on
  * this channel yet (documented in `public_forms.py`). Treat this page as a
@@ -50,7 +50,7 @@ function Shell({ children }: { children: ReactNode }) {
             <LogoMark width={22} height={22} />
           </span>
           <div className="min-w-0 leading-tight">
-            <div className="font-display text-sm font-semibold tracking-tight text-ink">Ágora</div>
+            <div className="font-display text-sm font-semibold tracking-tight text-ink">Atenea</div>
             <div className="eyebrow">Atención Ciudadana</div>
           </div>
         </header>
@@ -60,7 +60,7 @@ function Shell({ children }: { children: ReactNode }) {
         </main>
 
         <footer className="reveal mx-auto w-full max-w-xl text-center text-[11px] text-ink-faint">
-          Plataforma de Atención Ciudadana · Ágora
+          Plataforma de Atención Ciudadana · Atenea
         </footer>
       </div>
     </div>

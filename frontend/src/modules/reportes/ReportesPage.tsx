@@ -164,7 +164,7 @@ function Briefing({ overview, stateCount, maxAction, maxActor }: BriefingProps) 
     <div className="reveal space-y-4 print:space-y-3 print:bg-white print:p-0 print:text-black">
       {/* Print-only header (hidden on screen — screen uses PageHeader). */}
       <div className="hidden print:mb-4 print:block print:border-b print:border-black/20 print:pb-3">
-        <h1 className="text-2xl font-bold">Ágora · Reporte Ejecutivo</h1>
+        <h1 className="text-2xl font-bold">Atenea · Reporte Ejecutivo</h1>
         <p className="text-sm">
           Briefing institucional compuesto de datos reales de la plataforma.
         </p>
@@ -336,7 +336,7 @@ function Briefing({ overview, stateCount, maxAction, maxActor }: BriefingProps) 
           </span>
         </span>
         <span className="font-mono uppercase tracking-wide">
-          Generado por Ágora
+          Generado por Atenea
         </span>
       </div>
     </div>

@@ -70,7 +70,7 @@ export function briefingToCsvRows(
   }
 
   // Provenance
-  rows.push({ section: "Metadatos", label: "Generado por", value: "Ágora Civic Intelligence" });
+  rows.push({ section: "Metadatos", label: "Generado por", value: "Atenea Civic Intelligence" });
   rows.push({ section: "Metadatos", label: "Datos generados", value: overview.generated_at });
   rows.push({ section: "Metadatos", label: "Exportado", value: new Date().toISOString() });
 
@@ -101,7 +101,7 @@ export function downloadCSV(
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `Reporte_Agora_${fileDate()}.csv`;
+  link.download = `Reporte_Atenea_${fileDate()}.csv`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

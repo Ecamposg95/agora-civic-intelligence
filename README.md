@@ -1,4 +1,4 @@
-# Ágora — Civic Intelligence
+# Atenea — Civic Intelligence
 
 > API-first GovTech platform for civic, electoral and territorial intelligence.
 > A premium, institutional command center for governed, auditable public-sector data.
@@ -9,7 +9,7 @@ Built by **Atlas Tech** for production GovTech development.
 
 ## Overview
 
-Ágora unifies **maps**, **executive dashboards**, **electoral data governance**,
+Atenea unifies **maps**, **executive dashboards**, **electoral data governance**,
 **civic participation analytics** and an **institutional AI analyst** behind a
 single, API-first spine. The backend owns all security, authorization,
 validation and business rules; the frontend is a pure consumer of `/api/*`.
