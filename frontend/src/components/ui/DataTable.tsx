@@ -97,7 +97,7 @@ export function DataTable<T>({
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-line bg-bg-sunken/70 text-ink-muted backdrop-blur">
+            <tr className="sticky top-0 z-10 border-b border-line bg-panel-raised text-ink-muted">
               {columns.map((c) => {
                 const isSorted = sortKey === c.key;
                 return (
@@ -105,7 +105,7 @@ export function DataTable<T>({
                     key={c.key}
                     scope="col"
                     aria-sort={isSorted ? (sortDir === "asc" ? "ascending" : "descending") : undefined}
-                    className={`px-4 py-2.5 text-xs font-semibold uppercase tracking-wide ${alignCls(c.align)}`}
+                    className={`px-[18px] py-3 text-xs font-semibold uppercase tracking-wide ${alignCls(c.align)}`}
                   >
                     {c.sortValue ? (
                       <button
@@ -135,7 +135,7 @@ export function DataTable<T>({
                 className={`border-b border-line/60 transition-colors hover:bg-panel-hover ${onRowClick ? "cursor-pointer focus-ring" : ""}`}
               >
                 {columns.map((c) => (
-                  <td key={c.key} className={`px-4 py-2.5 text-ink ${alignCls(c.align)}`}>
+                  <td key={c.key} className={`px-[18px] py-3 text-ink ${alignCls(c.align)}`}>
                     {c.render ? c.render(row) : String((row as Record<string, unknown>)[c.key] ?? "")}
                   </td>
                 ))}
