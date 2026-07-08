@@ -22,11 +22,11 @@ export function Bars({ items, color = "rgb(var(--c-accent))", highlightFirst }: 
         const fill = highlightFirst && i === 0 ? "rgb(var(--c-warm))" : color;
         return (
           <div key={item.label} className="grid items-center gap-2" style={{ gridTemplateColumns: "64px 1fr 52px" }}>
-            <span className="truncate text-xs text-ink-faint">{item.label}</span>
+            <span className="truncate text-xs text-ink-faint print:text-black/70">{item.label}</span>
             <div className="h-2.5 overflow-hidden rounded-pill bg-ink-faint/15">
               <div className="h-full rounded-pill" style={{ width: `${pct}%`, background: fill }} />
             </div>
-            <span className="text-right text-xs font-semibold tabular-nums text-ink">
+            <span className="text-right text-xs font-semibold tabular-nums text-ink print:text-black">
               {numberFormat.format(item.value)}
             </span>
           </div>

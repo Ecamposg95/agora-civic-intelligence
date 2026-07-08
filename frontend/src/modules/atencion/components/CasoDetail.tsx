@@ -62,6 +62,17 @@ const EVENTO_TIPO_LABEL: Record<string, string> = {
 
 const TERMINAL_ESTADOS = new Set(["ATENDIDO", "CERRADO"]);
 
+/**
+ * Parses `fecha_compromiso` defensively — mirrors CasosPage's `parseCompromiso`
+ * (duplicated for the same circular-import reason above). Slicing to the
+ * first 10 chars keeps a datetime value parseable instead of yielding an
+ * Invalid Date that would silently read as "no deadline".
+ */
+function parseCompromiso(fecha: string): Date | null {
+  const due = new Date(`${fecha.slice(0, 10)}T00:00:00`);
+  return Number.isNaN(due.getTime()) ? null : due;
+}
+
 /** SLA semáforo — same rule as CasosPage's SlaBadge (duplicated for the same
  * circular-import reason above): vencido (red) / vence pronto (ámbar) / neutral. */
 function SlaBadge({ caso }: { caso: Pick<Caso, "fecha_compromiso" | "estado"> }) {
@@ -72,9 +83,14 @@ function SlaBadge({ caso }: { caso: Pick<Caso, "fecha_compromiso" | "estado"> })
       </span>
     );
   }
+  const due = parseCompromiso(caso.fecha_compromiso);
+  if (!due) {
+    // Present-but-unparseable is a data anomaly, not "no deadline" — flag it
+    // instead of silently falling back to neutral.
+    return <span className="pill border-state-critical/30 bg-state-critical/10 text-state-critical">Fecha inválida</span>;
+  }
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const due = new Date(`${caso.fecha_compromiso}T00:00:00`);
   const diffDays = Math.round((due.getTime() - today.getTime()) / 86_400_000);
 
   if (diffDays < 0) {

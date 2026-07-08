@@ -72,6 +72,18 @@ export interface SlaInfo {
 }
 
 /**
+ * Parses `fecha_compromiso` defensively: the backend contract is a plain
+ * `YYYY-MM-DD` date, but if it ever sends a full datetime (or any string with
+ * a date prefix), slicing to the first 10 chars still yields a valid local
+ * midnight `Date`. Returns `null` only when the value has no parseable date
+ * at all — never as a side effect of it being a datetime.
+ */
+function parseCompromiso(fecha: string): Date | null {
+  const due = new Date(`${fecha.slice(0, 10)}T00:00:00`);
+  return Number.isNaN(due.getTime()) ? null : due;
+}
+
+/**
  * SLA semáforo shared by the inbox table and the detail header:
  * - `fecha_compromiso` past and the caso isn't ATENDIDO/CERRADO → red "Vencido".
  * - Due within the next 2 days (and not done) → amber "Vence hoy/en Nd".
@@ -81,9 +93,15 @@ export function slaInfo(caso: Pick<Caso, "fecha_compromiso" | "estado">): SlaInf
   if (!caso.fecha_compromiso || TERMINAL_ESTADOS.has(caso.estado)) {
     return { tone: "neutral", label: caso.fecha_compromiso ?? "Sin fecha" };
   }
+  const due = parseCompromiso(caso.fecha_compromiso);
+  if (!due) {
+    // A present-but-unparseable value is a data anomaly, not "no deadline" —
+    // flag it instead of silently downgrading to neutral, which would
+    // under-count a real SLA breach.
+    return { tone: "critical", label: "Fecha inválida" };
+  }
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const due = new Date(`${caso.fecha_compromiso}T00:00:00`);
   const diffDays = Math.round((due.getTime() - today.getTime()) / 86_400_000);
 
   if (diffDays < 0) return { tone: "critical", label: "Vencido" };

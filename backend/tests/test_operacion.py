@@ -52,6 +52,33 @@ def _cleanup():
         db.close()
 
 
+def test_planes_survives_null_electoral_fields(client):
+    """A SeccionElectoral row with NULL participacion/margen must not 500 the
+    endpoint (nullable columns — regression guard)."""
+    db = TestingSessionLocal()
+    try:
+        if db.execute(select(SeccionElectoral).where(
+                SeccionElectoral.seccion == "8883", SeccionElectoral.anio == 2024)).scalar_one_or_none() is None:
+            db.add(SeccionElectoral(seccion="8883", municipio="San Mateo Atenco", anio=2024,
+                                    prioridad="COMPETITIVA"))  # participacion/margen/votos all NULL
+            db.commit()
+    finally:
+        db.close()
+    try:
+        p = client.get("/api/operacion/planes", headers=_hdr(client, "coord@alpha.gov"))
+        assert p.status_code == 200, p.text
+        row = _find(p.json(), "8883")
+        assert row is not None and row["electoral"]["persuadible"] is False
+        assert row["electoral"]["participacion"] is None
+        s = client.get("/api/operacion/seguimiento", headers=_hdr(client, "coord@alpha.gov"))
+        assert s.status_code == 200, s.text
+    finally:
+        db = TestingSessionLocal()
+        db.execute(delete(SeccionElectoral).where(SeccionElectoral.seccion == "8883"))
+        db.execute(delete(SeccionPlan).where(SeccionPlan.seccion == "8883"))
+        db.commit(); db.close()
+
+
 def test_suggest_meta():
     assert operacion_service.suggest_meta("ALTA_PERSUADIBLE") == 30
     assert operacion_service.suggest_meta("RECUPERAR_OPOSICION") == 15

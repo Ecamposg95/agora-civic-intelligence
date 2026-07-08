@@ -72,7 +72,8 @@ export function AdminEstructuraPage() {
 
       <DataState
         loading={loading}
-        error={null}
+        error={error}
+        onRetry={reload}
         skeleton={
           <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {[0, 1, 2].map((i) => (
@@ -315,6 +316,7 @@ function CreateUserModal({
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     setError(null);
     setSaving(true);
     try {
@@ -496,6 +498,7 @@ function EditUserModal({
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    if (saving) return;
     setError(null);
     setSaving(true);
     try {
