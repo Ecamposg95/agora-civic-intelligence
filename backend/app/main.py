@@ -81,12 +81,17 @@ async def lifespan(app: FastAPI):
 
         with SessionLocal() as db:
             seed_demo_territory(db)
-    if os.getenv("SEED_MUNICIPIO_INTEL", "").lower() == "true":
+    # San Mateo Atenco study intelligence (CensusMetric): idempotent + lightweight
+    # (49 aggregate rows), so ensure it's present on every boot rather than gating
+    # on a flag. Never let a seed failure block startup.
+    try:
         from app.database import SessionLocal
         from app.seeds.demo_municipio_intel import seed_municipio_intel
 
         with SessionLocal() as db:
             seed_municipio_intel(db)
+    except Exception:
+        logger.exception("Municipio intel seed failed during startup")
     yield
 
 
