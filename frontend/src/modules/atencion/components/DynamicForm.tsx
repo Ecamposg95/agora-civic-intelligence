@@ -19,7 +19,7 @@ export interface DynamicFormProps {
 }
 
 /** Mirrors backend `_visible(schema, answers, field)` in app/services/form_schema.py. */
-function isVisible(field: FormField, value: Record<string, unknown>): boolean {
+export function isVisible(field: FormField, value: Record<string, unknown>): boolean {
   const cond = field.mostrar_si;
   if (!cond) return true;
   return value[cond.campo] === cond.igual;
@@ -239,7 +239,7 @@ export function DynamicForm({ schema, value, onChange, errors }: DynamicFormProp
   return (
     <div className="flex flex-col gap-6">
       {(schema.secciones ?? []).map((seccion, idx) => {
-        const visibleCampos = seccion.campos.filter((f) => isVisible(f, value));
+        const visibleCampos = (seccion.campos ?? []).filter((f) => isVisible(f, value));
         if (visibleCampos.length === 0) return null;
         return (
           <div key={`${seccion.titulo}-${idx}`} className="flex flex-col gap-4">

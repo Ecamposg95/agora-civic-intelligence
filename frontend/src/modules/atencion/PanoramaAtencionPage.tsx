@@ -95,19 +95,19 @@ const RESPONSABLE_COLUMNS: Column<PorResponsable>[] = [
 export default function PanoramaAtencionPage() {
   const state = useAsync(getCasoPanorama, []);
   const data = state.data;
-  const isEmpty = !state.loading && !state.error && (data?.kpis.total ?? 0) === 0;
+  const isEmpty = !state.loading && !state.error && (data?.kpis?.total ?? 0) === 0;
 
   const kpis = data?.kpis;
 
   const estadoDonut: DonutDatum[] = ESTADO_ORDER.filter(
-    (estado) => (data?.por_estado[estado] ?? 0) > 0,
+    (estado) => (data?.por_estado?.[estado] ?? 0) > 0,
   ).map((estado) => ({
     name: ESTADO_LABEL[estado],
-    value: data?.por_estado[estado] ?? 0,
+    value: data?.por_estado?.[estado] ?? 0,
     color: ESTADO_DONUT_COLOR[estado],
   }));
 
-  const maxColonia = Math.max(0, ...(data?.por_colonia.map((c) => c.casos) ?? [0]));
+  const maxColonia = Math.max(0, ...(data?.por_colonia ?? []).map((c) => c.casos));
 
   return (
     <AppLayout title="Panorama de Atención Ciudadana" crumb="Atención Ciudadana">
@@ -196,7 +196,7 @@ export default function PanoramaAtencionPage() {
                       {ESTADO_LABEL[estado]}
                     </span>
                     <span className="font-mono tabular-nums text-ink">
-                      {data?.por_estado[estado] ?? 0}
+                      {data?.por_estado?.[estado] ?? 0}
                     </span>
                   </div>
                 ))}
