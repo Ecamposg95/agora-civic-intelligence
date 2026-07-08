@@ -64,12 +64,12 @@ def panorama(db: Session, code: str) -> Optional[dict]:
     # Section matrix (SeccionElectoral 2024).
     secciones = [{
         "seccion": s.seccion,
-        "lista_nominal": s.lista_nominal,
-        "votos": s.votos,
-        "participacion": float(s.participacion),
-        "coalicion": s.coalicion,
-        "morena": s.morena,
-        "margen": s.margen,
+        "lista_nominal": _opt_int(s.lista_nominal),
+        "votos": _opt_int(s.votos),
+        "participacion": float(s.participacion) if s.participacion is not None else None,
+        "coalicion": _opt_int(s.coalicion),
+        "morena": _opt_int(s.morena),
+        "margen": _opt_int(s.margen),
         "prioridad": s.prioridad,
     } for s in db.execute(
         select(SeccionElectoral)

@@ -69,16 +69,18 @@ def list_planes(db: Session, ctx: CampaignContext) -> list[dict]:
     for s in secciones:
         plan = planes.get(s.seccion)
         meta_sug = suggest_meta(s.prioridad)
-        meta = plan.meta_semanal if plan and plan.meta_semanal is not None else None
+        # A stored meta of 0 (or None) means "no explicit target" → fall back to
+        # the priority-suggested meta rather than a permanent-red 0.
+        meta = plan.meta_semanal if plan and plan.meta_semanal else None
         capturados = avance.get(s.seccion, 0)
-        efectiva = meta if meta is not None else meta_sug
+        efectiva = meta if meta else meta_sug
         out.append({
             "seccion": s.seccion,
             "electoral": {
                 "margen": s.margen,
                 "prioridad": s.prioridad,
-                "participacion": float(s.participacion),
-                "persuadible": abs(s.margen) <= _PERSUADIBLE_UMBRAL,
+                "participacion": float(s.participacion) if s.participacion is not None else None,
+                "persuadible": abs(s.margen) <= _PERSUADIBLE_UMBRAL if s.margen is not None else False,
             },
             "plan": {
                 "responsable_id": plan.responsable_id if plan else None,
@@ -102,6 +104,7 @@ def list_planes(db: Session, ctx: CampaignContext) -> list[dict]:
 def upsert_plan(db: Session, ctx: CampaignContext, seccion: str, data: dict) -> None:
     plan = db.execute(
         select(SeccionPlan).where(
+            SeccionPlan.organization_id == ctx.organization_id,
             SeccionPlan.campaign_id == ctx.campaign_id,
             SeccionPlan.seccion == seccion,
         )
@@ -149,6 +152,7 @@ def _get_item(db: Session, ctx: CampaignContext, item_id: str) -> AgendaItem:
     item = db.execute(
         select(AgendaItem).where(
             AgendaItem.id == item_id,
+            AgendaItem.organization_id == ctx.organization_id,
             AgendaItem.campaign_id == ctx.campaign_id,
             AgendaItem.deleted_at.is_(None),
         )
@@ -170,17 +174,21 @@ def update_agenda(db: Session, ctx: CampaignContext, item_id: str, data: dict) -
 
 # ── Seguimiento / war room ───────────────────────────────────────────────────
 
-def _weekly_trend(db: Session, ctx: CampaignContext, last_n: int = 12) -> list[dict]:
+def _weekly_trend(db: Session, ctx: CampaignContext,
+                  secciones: Optional[set[str]] = None, last_n: int = 12) -> list[dict]:
     """Cumulative promovidos by ISO week, derived from Registro.created_at
-    (immutable → real history for free, no snapshot table)."""
-    fechas = db.execute(
-        select(Registro.created_at).where(
-            Registro.campaign_id == ctx.campaign_id,
-            Registro.organization_id == ctx.organization_id,
-            Registro.deleted_at.is_(None),
-            Registro.created_at.is_not(None),
-        )
-    ).scalars().all()
+    (immutable → real history for free, no snapshot table). Scoped to
+    ``secciones`` when given so the trend total reconciles with the semáforo
+    rollup (which only covers matrix sections)."""
+    stmt = select(Registro.created_at).where(
+        Registro.campaign_id == ctx.campaign_id,
+        Registro.organization_id == ctx.organization_id,
+        Registro.deleted_at.is_(None),
+        Registro.created_at.is_not(None),
+    )
+    if secciones is not None:
+        stmt = stmt.where(Registro.seccion.in_(secciones or {"__none__"}))
+    fechas = db.execute(stmt).scalars().all()
     por_semana: Counter = Counter()
     for dt in fechas:
         y, w, _ = dt.isocalendar()
@@ -231,7 +239,7 @@ def seguimiento(db: Session, ctx: CampaignContext) -> dict:
             "en_riesgo": sum(1 for s in semaforo if s["status"] == "rojo"),
             "al_dia": sum(1 for s in semaforo if s["status"] == "verde"),
         },
-        "tendencia": _weekly_trend(db, ctx),
+        "tendencia": _weekly_trend(db, ctx, secciones={s["seccion"] for s in semaforo}),
         "semaforo": sorted(semaforo, key=lambda s: s["pct"]),  # worst first
         "alertas": alertas,
     }

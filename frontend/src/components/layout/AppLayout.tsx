@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
@@ -11,6 +13,7 @@ interface AppLayoutProps {
 
 export function AppLayout({ title, crumb, children }: AppLayoutProps) {
   const [navOpen, setNavOpen] = useState(false);
+  const { pathname } = useLocation();
 
   return (
     <div className="relative flex h-screen w-full overflow-hidden bg-bg text-ink">
@@ -31,7 +34,7 @@ export function AppLayout({ title, crumb, children }: AppLayoutProps) {
       <div className="relative z-10 flex min-w-0 flex-1 flex-col">
         <Topbar title={title} crumb={crumb} onMenu={() => setNavOpen(true)} />
         <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
-          {children}
+          <ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary>
         </main>
       </div>
     </div>
