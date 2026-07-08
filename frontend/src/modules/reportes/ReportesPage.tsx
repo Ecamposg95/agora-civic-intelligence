@@ -147,6 +147,13 @@ interface BriefingProps {
  * their source and generation timestamp.
  */
 function Briefing({ overview, stateCount }: BriefingProps) {
+  // Defensive: a partial/degraded payload should never white-screen the page.
+  const coverage = overview.coverage ?? [];
+  const activity = overview.trends?.activity ?? [];
+  const byAction = overview.by_action ?? [];
+  const byActor = overview.by_actor ?? [];
+  const alerts = overview.alerts ?? [];
+
   // P-8: reveal wraps the primary content block for entrance animation
   return (
     <div className="reveal space-y-6 print:space-y-3 print:bg-white print:p-0 print:text-black">
@@ -167,14 +174,14 @@ function Briefing({ overview, stateCount }: BriefingProps) {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 print:grid-cols-4 print:gap-2">
           <KpiCard
             label="Áreas electorales"
-            value={overview.summary.electoral_areas}
+            value={overview.summary?.electoral_areas ?? 0}
             icon={<LayersIcon />}
             tone="accent"
             delay={60}
           />
           <KpiCard
             label="Organizaciones"
-            value={overview.summary.organizations}
+            value={overview.summary?.organizations ?? 0}
             icon={<UserIcon />}
             tone="teal"
             delay={120}
@@ -183,14 +190,14 @@ function Briefing({ overview, stateCount }: BriefingProps) {
               meaning, so it no longer borrows the "warning" tone here. */}
           <KpiCard
             label="Usuarios"
-            value={overview.summary.users}
+            value={overview.summary?.users ?? 0}
             icon={<VotersIcon />}
             tone="warm"
             delay={180}
           />
           <KpiCard
             label="Fuentes de datos"
-            value={overview.summary.data_sources}
+            value={overview.summary?.data_sources ?? 0}
             icon={<DatabaseIcon />}
             tone="accent"
             delay={240}
@@ -209,11 +216,11 @@ function Briefing({ overview, stateCount }: BriefingProps) {
                 ? `${intFmt.format(stateCount)} entidades cartografiadas`
                 : undefined
             }
-            empty={overview.coverage.length === 0}
+            empty={coverage.length === 0}
             className="print:bg-white print:text-black print:border print:border-black/20"
           >
             <Bars
-              items={overview.coverage.map((c) => ({
+              items={coverage.map((c) => ({
                 label: cap(c.level),
                 value: c.count,
               }))}
@@ -226,11 +233,11 @@ function Briefing({ overview, stateCount }: BriefingProps) {
           <ChartFrame
             title="Tendencia de actividad"
             caption="Eventos por periodo"
-            empty={overview.trends.activity.length === 0}
+            empty={activity.length === 0}
             className="print:bg-white print:text-black print:border print:border-black/20"
           >
             <AreaTrend
-              points={overview.trends.activity.map((p) => ({
+              points={activity.map((p) => ({
                 x: p.period,
                 y: p.value,
               }))}
@@ -244,16 +251,16 @@ function Briefing({ overview, stateCount }: BriefingProps) {
         <SectionHeading
           eyebrow="Detalle"
           title="Acciones y actores"
-          note={`Top ${overview.by_action.length} · Top ${overview.by_actor.length}`}
+          note={`Top ${byAction.length} · Top ${byActor.length}`}
         />
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 print:grid-cols-2 print:gap-3">
           <ChartFrame
             title="Acciones principales"
-            empty={overview.by_action.length === 0}
+            empty={byAction.length === 0}
             className="print:bg-white print:text-black print:border print:border-black/20"
           >
             <Bars
-              items={overview.by_action.map((a) => ({
+              items={byAction.map((a) => ({
                 label: a.action,
                 value: a.count,
               }))}
@@ -263,11 +270,11 @@ function Briefing({ overview, stateCount }: BriefingProps) {
 
           <ChartFrame
             title="Actores principales"
-            empty={overview.by_actor.length === 0}
+            empty={byActor.length === 0}
             className="print:bg-white print:text-black print:border print:border-black/20"
           >
             <Bars
-              items={overview.by_actor.map((a) => ({
+              items={byActor.map((a) => ({
                 label: a.actor_id,
                 value: a.count,
               }))}
@@ -278,14 +285,14 @@ function Briefing({ overview, stateCount }: BriefingProps) {
       </div>
 
       {/* Alerts (only if present) */}
-      {overview.alerts.length > 0 && (
+      {alerts.length > 0 && (
         <Card
           title="Alertas"
           accentDot
           className="reveal print:border print:border-black/20 print:bg-white print:text-black"
         >
           <ul className="space-y-2">
-            {overview.alerts.map((a, i) => (
+            {alerts.map((a, i) => (
               <li
                 key={`${a.title}-${i}`}
                 className={`rounded-card border px-3 py-2 text-sm ${
@@ -336,6 +343,7 @@ function KpiCard({ label, value, icon, tone, delay }: KpiCardProps) {
       icon={icon}
       tone={tone}
       delay={delay}
+      className="print:bg-white print:text-black"
     />
   );
 }

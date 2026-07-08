@@ -84,6 +84,7 @@ export function AreaTrend({ points, color = "var(--chart-1)" }: AreaTrendProps) 
             textAnchor="middle"
             fontSize={12}
             fontWeight={700}
+            className="print:fill-black"
             fill={color}
             style={{ fontVariantNumeric: "tabular-nums" }}
           >
@@ -93,7 +94,15 @@ export function AreaTrend({ points, color = "var(--chart-1)" }: AreaTrendProps) 
       )}
 
       {coords.map((c, i) => (
-        <text key={i} x={c.px} y={HEIGHT - 8} textAnchor="middle" fontSize={10} fill="var(--chart-axis)">
+        <text
+          key={i}
+          x={c.px}
+          y={HEIGHT - 8}
+          textAnchor="middle"
+          fontSize={10}
+          className="print:fill-black"
+          fill="var(--chart-axis)"
+        >
           {c.label}
         </text>
       ))}

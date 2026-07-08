@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Avatar } from "@/components/ui/Avatar";
@@ -10,6 +10,8 @@ import { MetricCard } from "@/components/ui/MetricCard";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { useAsync } from "@/hooks/useAsync";
 import { listPromovidos, type Promovido } from "@/api/promovidos";
+
+const PAGE = 50;
 
 const PRIORIDAD_CLASS: Record<string, string> = {
   DEFENDER_EXPANDIR: "bg-state-success/10 text-state-success",
@@ -116,8 +118,20 @@ const COLUMNS: Column<Promovido>[] = [
 ];
 
 export function PromovidosPage() {
+  const [qInput, setQInput] = useState("");
   const [q, setQ] = useState("");
-  const state = useAsync(() => listPromovidos({ q }), [q]);
+  const [offset, setOffset] = useState(0);
+
+  // Debounce raw search input → committed value, resetting to the first page.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setOffset(0);
+      setQ(qInput.trim());
+    }, 300);
+    return () => clearTimeout(t);
+  }, [qInput]);
+
+  const state = useAsync(() => listPromovidos({ q, limit: PAGE, offset }), [q, offset]);
   const data = state.data;
 
   return (
@@ -165,17 +179,39 @@ export function PromovidosPage() {
                 note={data ? `${data.items.length} de ${data.total}` : undefined} />
               <div className="mb-3 mt-3 flex justify-end">
                 <input className="field-input h-8 w-48" placeholder="Buscar nombre…"
-                  value={q} onChange={(e) => setQ(e.target.value)} />
+                  value={qInput} onChange={(e) => setQInput(e.target.value)} />
               </div>
               <DataTable<Promovido>
                 columns={COLUMNS}
                 rows={data?.items ?? []}
                 rowKey={(p) => p.id}
-                pageSize={data?.items.length || 50}
+                pageSize={PAGE}
                 defaultSortKey="nombre_completo"
                 defaultSortDir="asc"
                 emptyMessage="Sin promovidos…"
               />
+
+              {/* Server-side pagination — the table above only ever holds one page. */}
+              {!state.loading && !state.error && (data?.total ?? 0) > PAGE && (
+                <div className="mt-3 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    disabled={state.loading || offset === 0}
+                    onClick={() => setOffset(Math.max(0, offset - PAGE))}
+                    className="btn-ghost focus-ring disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    type="button"
+                    disabled={state.loading || !data || offset + PAGE >= data.total}
+                    onClick={() => setOffset(offset + PAGE)}
+                    className="btn-ghost focus-ring disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </DataState>

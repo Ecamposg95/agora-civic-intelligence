@@ -23,6 +23,8 @@ interface MetricCardProps {
   format?: (n: number) => string;
   delay?: number;
   context?: string;
+  /** Extra classes appended to the card root (e.g. print-safe overrides). */
+  className?: string;
 }
 
 const TONE: Record<
@@ -73,16 +75,17 @@ export function MetricCard({
   format,
   delay,
   context,
+  className,
 }: MetricCardProps) {
   const t = TONE[tone];
 
   return (
     <div
-      className="card-premium hud-corners reveal p-5"
+      className={`card-premium hud-corners reveal p-5${className ? ` ${className}` : ""}`}
       style={{ animationDelay: delay ? `${delay}ms` : undefined }}
     >
       <div className="flex items-center justify-between">
-        <span className="eyebrow">{label}</span>
+        <span className="eyebrow print:text-black/70">{label}</span>
         {icon && (
           <span className={`metric-chip h-9 w-9 ${t.text} ${t.glow}`}>
             {icon}
@@ -90,7 +93,7 @@ export function MetricCard({
         )}
       </div>
 
-      <div className="mt-3 font-display text-3xl font-bold tabular-nums tracking-tight text-ink">
+      <div className="mt-3 font-display text-3xl font-bold tabular-nums tracking-tight text-ink print:text-black">
         {typeof countTo === "number" ? (
           <AnimatedNumber value={countTo} format={format} />
         ) : (
@@ -98,7 +101,7 @@ export function MetricCard({
         )}
       </div>
 
-      {context && <div className="mt-1 text-xs text-ink-faint">{context}</div>}
+      {context && <div className="mt-1 text-xs text-ink-faint print:text-black/70">{context}</div>}
 
       {delta ? (
         deltaDir === "down" ? (
