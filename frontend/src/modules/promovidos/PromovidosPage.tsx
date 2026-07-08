@@ -63,6 +63,13 @@ const COLUMNS: Column<Promovido>[] = [
     render: (p) => <span className="font-mono text-ink-muted">{p.seccion ?? "—"}</span>,
   },
   {
+    key: "direccion",
+    header: "Dirección",
+    hideOnCard: true,
+    sortValue: (p) => p.direccion ?? "",
+    render: (p) => <span className="text-ink-muted">{p.direccion ?? "—"}</span>,
+  },
+  {
     key: "colonia",
     header: "Colonia",
     hideOnCard: true,

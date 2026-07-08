@@ -11,6 +11,7 @@ class PromovidoRead(BaseModel):
     nombre_completo: str
     created_at: Optional[datetime] = None
     seccion: Optional[str] = None
+    direccion: Optional[str] = None
     colonia: Optional[str] = None
     telefono: Optional[str] = None
     edad: Optional[int] = None
