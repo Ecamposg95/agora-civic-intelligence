@@ -46,7 +46,9 @@ export interface EarlierField {
 // string. Boolean answers are JS booleans, multiselect answers are arrays, and
 // foto answers are blobs — none can ever equal a string, so a condition targeting
 // them is permanently unsatisfiable. Exclude them as condition targets.
-const UNCONDITIONABLE_TYPES = new Set(["boolean", "multiselect", "foto"]);
+// Exported so `FormBuilderPage`'s `structureErrors` can flag a `mostrar_si` that
+// targets one of these types as an invalid (not just dangling) reference.
+export const UNCONDITIONABLE_TYPES = new Set(["boolean", "multiselect", "foto"]);
 
 interface FieldEditorProps {
   field: FormField;

@@ -18,7 +18,7 @@ import {
 } from "@/api/atencion";
 
 import { DynamicForm, validate } from "./components/DynamicForm";
-import { FIELD_TYPES, FieldEditor, type EarlierField } from "./components/FieldEditor";
+import { FIELD_TYPES, FieldEditor, UNCONDITIONABLE_TYPES, type EarlierField } from "./components/FieldEditor";
 
 /* -------------------------------------------------------------- helpers */
 
@@ -189,22 +189,61 @@ export function FormBuilderPage() {
     }));
   }
 
+  /**
+   * Renaming a field's `key` must not silently break every dependent
+   * `mostrar_si.campo` that pointed at the old key — rewrite them in the same
+   * update so the conditional-logic rule keeps tracking the (renamed) field.
+   */
   function updateField(sectionIdx: number, fieldIdx: number, next: FormField): void {
-    setSchema((s) => ({
-      secciones: s.secciones.map((sec, i) =>
+    setSchema((s) => {
+      const prevField = s.secciones[sectionIdx]?.campos[fieldIdx];
+      const oldKey = prevField?.key;
+      const newKey = next.key;
+      const updatedSecciones = s.secciones.map((sec, i) =>
         i === sectionIdx
           ? { ...sec, campos: sec.campos.map((c, j) => (j === fieldIdx ? next : c)) }
           : sec,
-      ),
-    }));
+      );
+      if (!oldKey || !newKey || oldKey === newKey) {
+        return { secciones: updatedSecciones };
+      }
+      return {
+        secciones: updatedSecciones.map((sec) => ({
+          ...sec,
+          campos: sec.campos.map((c) =>
+            c.mostrar_si?.campo === oldKey
+              ? { ...c, mostrar_si: { ...c.mostrar_si, campo: newKey } }
+              : c,
+          ),
+        })),
+      };
+    });
   }
 
+  /**
+   * Removing a field must also clear (not just leave dangling) any
+   * `mostrar_si` rule that depended on it — the target no longer exists, so
+   * the dependent reverts to always-visible rather than staying silently
+   * hidden forever.
+   */
   function removeField(sectionIdx: number, fieldIdx: number): void {
-    setSchema((s) => ({
-      secciones: s.secciones.map((sec, i) =>
+    setSchema((s) => {
+      const removedKey = s.secciones[sectionIdx]?.campos[fieldIdx]?.key;
+      const updatedSecciones = s.secciones.map((sec, i) =>
         i === sectionIdx ? { ...sec, campos: sec.campos.filter((_, j) => j !== fieldIdx) } : sec,
-      ),
-    }));
+      );
+      if (!removedKey) return { secciones: updatedSecciones };
+      return {
+        secciones: updatedSecciones.map((sec) => ({
+          ...sec,
+          campos: sec.campos.map((c) => {
+            if (c.mostrar_si?.campo !== removedKey) return c;
+            const { mostrar_si: _drop, ...rest } = c;
+            return rest;
+          }),
+        })),
+      };
+    });
   }
 
   function moveField(sectionIdx: number, fieldIdx: number, dir: -1 | 1): void {
@@ -242,6 +281,12 @@ export function FormBuilderPage() {
     if (secciones.length === 0) errors.push("Agrega al menos una sección.");
 
     const allKeys: string[] = [];
+    // Fields seen so far, in document order — the only valid `mostrar_si.campo`
+    // targets. A rule whose target isn't in here (removed, renamed away, or
+    // reordered to no longer precede the dependent) is a dangling reference:
+    // the dependent field would render permanently hidden with no error at
+    // capture time, so it must block saving here instead.
+    const seenFields: { key: string; tipo: string }[] = [];
     for (const sec of secciones) {
       for (const f of sec.campos) {
         if (!f.key.trim() || !f.label.trim()) {
@@ -250,7 +295,20 @@ export function FormBuilderPage() {
         if (OPTIONS_TYPES.has(f.tipo) && (!f.opciones || f.opciones.length === 0)) {
           errors.push(`El campo "${f.label || f.key}" necesita al menos una opción.`);
         }
+        if (f.mostrar_si) {
+          const target = seenFields.find((sf) => sf.key === f.mostrar_si!.campo);
+          if (!target) {
+            errors.push(
+              `El campo "${f.label || f.key}" tiene una condición "mostrar solo si" que apunta a un campo inexistente o que no lo precede.`,
+            );
+          } else if (UNCONDITIONABLE_TYPES.has(target.tipo)) {
+            errors.push(
+              `El campo "${f.label || f.key}" tiene una condición "mostrar solo si" inválida: el campo del que depende no admite condiciones.`,
+            );
+          }
+        }
         allKeys.push(f.key);
+        seenFields.push({ key: f.key, tipo: f.tipo });
       }
     }
     const dupes = allKeys.filter((k, i) => k && allKeys.indexOf(k) !== i);
@@ -278,6 +336,7 @@ export function FormBuilderPage() {
       if (formId) {
         await updateForm(formId, payload);
         setSaveMessage("Formulario actualizado.");
+        existingState.reload();
       } else {
         const created = await createForm(payload);
         setSaveMessage("Formulario creado.");

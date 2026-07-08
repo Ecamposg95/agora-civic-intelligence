@@ -18,7 +18,7 @@ import {
 } from "@/api/atencion";
 import { PhotoCapture } from "@/modules/militantes/components/PhotoCapture";
 
-import { DynamicForm, validate } from "./components/DynamicForm";
+import { DynamicForm, isVisible, validate } from "./components/DynamicForm";
 import { scanIne, type IneFields } from "./lib/ocr";
 
 /**
@@ -188,8 +188,18 @@ export default function CapturaAtencionPage() {
         .filter((f) => f.tipo === "foto")
         .map((f) => f.key),
     );
+    // Fields hidden by `mostrar_si` are skipped by both `validate` and
+    // `DynamicForm`'s rendering — but any stale answer captured before the
+    // condition flipped must not be submitted either. Reuse the same
+    // visibility rule so hidden-field answers never reach /responses.
+    const visibleKeys = new Set(
+      form.schema.secciones
+        .flatMap((s) => s.campos)
+        .filter((f) => isVisible(f, answers))
+        .map((f) => f.key),
+    );
     const payloadAnswers = Object.fromEntries(
-      Object.entries(answers).filter(([key]) => !fotoKeys.has(key)),
+      Object.entries(answers).filter(([key]) => !fotoKeys.has(key) && visibleKeys.has(key)),
     );
 
     try {
