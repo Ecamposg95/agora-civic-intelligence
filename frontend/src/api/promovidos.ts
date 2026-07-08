@@ -30,6 +30,7 @@ export interface Promovido {
   id: string;
   nombre_completo: string;
   seccion: string | null;
+  direccion: string | null;
   colonia: string | null;
   telefono: string | null;
   edad: number | null;
