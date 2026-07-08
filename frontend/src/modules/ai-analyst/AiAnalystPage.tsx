@@ -4,7 +4,9 @@ import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PreviewBanner } from "@/components/modules/PreviewBanner";
+import { Avatar } from "@/components/ui/Avatar";
 import { Card } from "@/components/ui/Card";
+import { SectionHeading } from "@/components/ui/SectionHeading";
 import { AiIcon } from "@/components/ui/icons";
 import { PANEL_HEIGHTS } from "@/constants/ui";
 import { ask, type Answer } from "./client";
@@ -40,14 +42,20 @@ export function AiAnalystPage() {
       />
       <PreviewBanner note="Respuestas de muestra · Conecta Claude API para análisis en vivo." />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <SectionHeading
+        eyebrow="Copiloto"
+        title="Conversación"
+        note={turns.length > 0 ? `${turns.length} mensaje${turns.length === 1 ? "" : "s"}` : undefined}
+      />
+
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="reveal lg:col-span-2" style={{ animationDelay: "120ms" }}>
           <Card title="Copiloto" accentDot className="h-full">
             <div className={`flex ${PANEL_HEIGHTS.copilot} flex-col`}>
               <div className="flex-1 space-y-3 overflow-y-auto pr-1">
                 {turns.length === 0 && (
                   <div className="flex h-full flex-col items-center justify-center gap-4 px-4 text-center">
-                    <span className="metric-chip h-14 w-14 text-accent shadow-glow-accent">
+                    <span className="metric-chip h-14 w-14 text-warm shadow-glow">
                       <AiIcon width={28} height={28} />
                     </span>
                     <div>
@@ -82,9 +90,9 @@ export function AiAnalystPage() {
                     </div>
                   ) : (
                     <div key={i} className="flex items-start gap-2.5">
-                      <span className="metric-chip mt-0.5 h-7 w-7 shrink-0 text-accent">
-                        <AiIcon width={15} height={15} />
-                      </span>
+                      <div className="mt-0.5 shrink-0">
+                        <Avatar initials="IA" variant="warm" />
+                      </div>
                       <div className="max-w-[85%] rounded-2xl rounded-tl-sm border border-line bg-bg-sunken px-3.5 py-2.5 text-sm leading-relaxed text-ink-muted">
                         {t.text}
                         {t.sample && (
@@ -98,11 +106,11 @@ export function AiAnalystPage() {
                 )}
                 {busy && (
                   <div className="flex items-center gap-2.5">
-                    <span className="metric-chip mt-0.5 h-7 w-7 shrink-0 text-accent">
-                      <AiIcon width={15} height={15} />
-                    </span>
+                    <div className="mt-0.5 shrink-0">
+                      <Avatar initials="IA" variant="warm" />
+                    </div>
                     <div className="inline-flex items-center gap-1 rounded-2xl rounded-tl-sm border border-line bg-bg-sunken px-3.5 py-2.5 text-sm text-ink-faint">
-                      <span className="h-1.5 w-1.5 animate-pulse-glow rounded-full bg-accent" />
+                      <span className="h-1.5 w-1.5 animate-pulse-glow rounded-full bg-warm" />
                       Pensando…
                     </div>
                   </div>

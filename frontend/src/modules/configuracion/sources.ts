@@ -15,7 +15,7 @@ export interface IntegrationSource {
   key: string;
   /** Display name of the source. */
   name: string;
-  /** What this source powers in Ágora. */
+  /** What this source powers in Atenea. */
   powers: string;
   /** Current, honest status. */
   status: IntegrationStatus;
@@ -146,6 +146,6 @@ export const INTEGRATIONS: IntegrationSource[] = [
     status: "bloqueada",
     format: "CKAN · SSL",
     howTo:
-      "El portal presenta un error de certificado SSL del lado del proveedor. No es configurable desde Ágora; depende de que datos.gob.mx corrija su TLS.",
+      "El portal presenta un error de certificado SSL del lado del proveedor. No es configurable desde Atenea; depende de que datos.gob.mx corrija su TLS.",
   },
 ];

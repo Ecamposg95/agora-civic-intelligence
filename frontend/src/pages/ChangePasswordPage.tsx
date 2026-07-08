@@ -70,7 +70,7 @@ export function ChangePasswordPage() {
           </div>
           <div>
             <div className="font-display text-sm font-semibold tracking-tight text-ink">
-              Ágora
+              Atenea
             </div>
             <div className="text-[11px] uppercase tracking-[0.16em] text-ink-faint">
               Civic Intelligence

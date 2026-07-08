@@ -1,5 +1,5 @@
 import type { LayerCategory, MapLayer } from "@/types/maps";
-import { LayersIcon } from "@/components/ui/icons";
+import { SectionHeading } from "@/components/ui/SectionHeading";
 
 interface LayerPanelProps {
   layers: MapLayer[];
@@ -16,16 +16,16 @@ const CATEGORY_TAG: Record<LayerCategory, string> = {
 export function LayerPanel({ layers, onToggle, loading }: LayerPanelProps) {
   if (loading) {
     return (
-      <div className="card-premium h-full p-5">
-        <div className="mb-4 flex items-center gap-2 font-display text-sm font-semibold text-ink">
-          <LayersIcon className="h-4 w-4 text-accent" /> Data Layers
+      <div className="card-premium reveal h-full p-5">
+        <SectionHeading eyebrow="Capas" title="Data Layers" />
+        <div className="mt-4">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="mb-2 h-14 animate-pulse rounded-lg bg-panel-hover"
+            />
+          ))}
         </div>
-        {[0, 1, 2].map((i) => (
-          <div
-            key={i}
-            className="mb-2 h-14 animate-pulse rounded-lg bg-panel-hover"
-          />
-        ))}
       </div>
     );
   }
@@ -33,14 +33,13 @@ export function LayerPanel({ layers, onToggle, loading }: LayerPanelProps) {
   const active = layers.filter((l) => l.visible).length;
 
   return (
-    <div className="card-premium flex h-full flex-col overflow-y-auto p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <span className="flex items-center gap-2 font-display text-sm font-semibold text-ink">
-          <LayersIcon className="h-4 w-4 text-accent" /> Data Layers
-        </span>
-        <span className="metric-chip !rounded-pill border-line px-2 py-0.5 font-mono text-[10px] text-ink-muted">
-          {active}/{layers.length} active
-        </span>
+    <div className="card-premium reveal flex h-full flex-col overflow-y-auto p-5">
+      <div className="mb-4">
+        <SectionHeading
+          eyebrow="Capas"
+          title="Data Layers"
+          note={`${active}/${layers.length} activas`}
+        />
       </div>
 
       {layers.length === 0 && (

@@ -13,8 +13,8 @@ export default defineConfig({
       injectRegister: "auto",
       includeAssets: ["favicon.svg"],
       manifest: {
-        name: "Ágora — Captura de Activistas",
-        short_name: "Ágora",
+        name: "Atenea — Captura de Activistas",
+        short_name: "Atenea",
         description: "Captura de activistas en campo, también sin conexión.",
         theme_color: "#0b1220",
         background_color: "#0b1220",

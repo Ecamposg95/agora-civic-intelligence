@@ -3,7 +3,7 @@ import { ArrowUpIcon } from "./icons";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { Sparkline } from "./Sparkline";
 
-type Tone = "accent" | "teal" | "warning" | "critical";
+type Tone = "accent" | "teal" | "warm" | "warning" | "critical";
 
 interface MetricCardProps {
   label: string;
@@ -22,6 +22,7 @@ interface MetricCardProps {
   countTo?: number;
   format?: (n: number) => string;
   delay?: number;
+  context?: string;
 }
 
 const TONE: Record<
@@ -40,11 +41,17 @@ const TONE: Record<
     stroke: "var(--chart-3)",
     fill: "color-mix(in srgb, var(--chart-3) 30%, transparent)",
   },
+  warm: {
+    text: "text-warm",
+    glow: "shadow-glow",
+    stroke: "rgb(var(--c-warm))",
+    fill: "color-mix(in srgb, rgb(var(--c-warm)) 30%, transparent)",
+  },
   warning: {
     text: "text-state-warning",
     glow: "shadow-glow",
-    stroke: "var(--chart-2)",
-    fill: "color-mix(in srgb, var(--chart-2) 28%, transparent)",
+    stroke: "rgb(var(--c-amber))",
+    fill: "color-mix(in srgb, rgb(var(--c-amber)) 28%, transparent)",
   },
   critical: {
     text: "text-state-critical",
@@ -65,6 +72,7 @@ export function MetricCard({
   countTo,
   format,
   delay,
+  context,
 }: MetricCardProps) {
   const t = TONE[tone];
 
@@ -89,6 +97,8 @@ export function MetricCard({
           value
         )}
       </div>
+
+      {context && <div className="mt-1 text-xs text-ink-faint">{context}</div>}
 
       {delta ? (
         deltaDir === "down" ? (

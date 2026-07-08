@@ -4,6 +4,9 @@ import { useState, type FormEvent } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
+import { DataState } from "@/components/ui/DataState";
+import { MetricCard } from "@/components/ui/MetricCard";
+import { SectionHeading } from "@/components/ui/SectionHeading";
 import { AlertIcon } from "@/components/ui/icons";
 import { useAsync } from "@/hooks/useAsync";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
@@ -248,16 +251,18 @@ export default function CapturaAtencionPage() {
     return (
       <AppLayout title="Atención Ciudadana" crumb="Atención Ciudadana">
         <PageHeader eyebrow="Atención Ciudadana" title="Captura" accent="Interna" />
-        <div className="card-premium flex flex-col items-center gap-4 px-5 py-12 text-center">
+        <div className="reveal flex flex-col items-center gap-5 py-10 text-center">
           <span className="metric-chip h-14 w-14 text-state-success">
             <CheckIcon />
           </span>
-          <div>
-            <p className="font-semibold text-ink">Caso registrado</p>
-            <p className="mt-1 text-sm text-ink-muted">Folio</p>
-            <p className="mt-1 font-display text-2xl font-bold text-gradient">
-              {result.folio ?? result.casoId ?? "—"}
-            </p>
+          <p className="font-semibold text-ink">Caso registrado</p>
+          <div className="w-full max-w-xs">
+            <MetricCard
+              label="Folio"
+              value={result.folio ?? result.casoId ?? "—"}
+              tone="warm"
+              delay={80}
+            />
           </div>
           <button type="button" className="btn-primary" onClick={resetAll}>
             Capturar otro
@@ -269,42 +274,19 @@ export default function CapturaAtencionPage() {
 
   /* ---------------------------------------------------- forms loading/error */
 
-  if (formsState.loading) {
+  if (formsState.loading || formsState.error || !form) {
     return (
       <AppLayout title="Atención Ciudadana" crumb="Atención Ciudadana">
         <PageHeader eyebrow="Atención Ciudadana" title="Captura" accent="Interna" />
-        <div className="h-40 animate-pulse rounded-lg bg-panel-hover" />
-      </AppLayout>
-    );
-  }
-
-  if (formsState.error) {
-    return (
-      <AppLayout title="Atención Ciudadana" crumb="Atención Ciudadana">
-        <PageHeader eyebrow="Atención Ciudadana" title="Captura" accent="Interna" />
-        <div className="card-premium animate-fade-in flex flex-col items-center gap-3 px-5 py-8 text-center">
-          <span className="metric-chip h-10 w-10 text-state-critical">
-            <AlertIcon width={18} height={18} />
-          </span>
-          <p className="max-w-sm text-sm leading-relaxed text-ink-muted">
-            {formsState.error}
-          </p>
-          <button type="button" className="btn-ghost" onClick={formsState.reload}>
-            Reintentar
-          </button>
-        </div>
-      </AppLayout>
-    );
-  }
-
-  if (!form) {
-    return (
-      <AppLayout title="Atención Ciudadana" crumb="Atención Ciudadana">
-        <PageHeader eyebrow="Atención Ciudadana" title="Captura" accent="Interna" />
-        <div className="card-premium px-5 py-8 text-center text-sm text-ink-faint">
-          No hay formularios activos para captura interna. Contacta a un
-          administrador.
-        </div>
+        <DataState
+          loading={formsState.loading}
+          error={formsState.error}
+          isEmpty={!form}
+          onRetry={formsState.reload}
+          emptyMessage="No hay formularios activos para captura interna. Contacta a un administrador."
+        >
+          {null}
+        </DataState>
       </AppLayout>
     );
   }
@@ -339,8 +321,17 @@ export default function CapturaAtencionPage() {
       />
 
       <div className="flex flex-col gap-4">
-        <div className="reveal" style={{ animationDelay: "120ms" }}>
-        <Card title="Escanear credencial" accentDot>
+        <section className="reveal flex flex-col gap-3" style={{ animationDelay: "100ms" }}>
+        <SectionHeading
+          eyebrow="Asistencia"
+          title="Escanear credencial"
+          note={
+            ocrKeys.size > 0
+              ? `${ocrKeys.size} campo${ocrKeys.size === 1 ? "" : "s"} prellenado${ocrKeys.size === 1 ? "" : "s"}`
+              : undefined
+          }
+        />
+        <Card>
           <p className="text-xs leading-relaxed text-ink-muted">
             Toma una foto de la credencial de elector para prellenar los
             campos coincidentes automáticamente. Los datos siempre quedan
@@ -384,7 +375,7 @@ export default function CapturaAtencionPage() {
             </p>
           )}
         </Card>
-        </div>
+        </section>
 
         {ocrKeys.size > 0 && (
           <div className="reveal flex flex-wrap items-center gap-2 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2">
@@ -399,8 +390,9 @@ export default function CapturaAtencionPage() {
           </div>
         )}
 
-        <div className="reveal" style={{ animationDelay: "160ms" }}>
-        <Card title={form.nombre} accentDot>
+        <section className="reveal flex flex-col gap-3" style={{ animationDelay: "200ms" }}>
+        <SectionHeading eyebrow="Captura" title={form.nombre} />
+        <Card>
           {form.descripcion && (
             <p className="mb-4 text-xs text-ink-muted">{form.descripcion}</p>
           )}
@@ -427,7 +419,7 @@ export default function CapturaAtencionPage() {
             </div>
           </form>
         </Card>
-        </div>
+        </section>
       </div>
     </AppLayout>
   );

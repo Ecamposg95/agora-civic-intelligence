@@ -65,7 +65,7 @@ export function LoginPage() {
             </div>
             <div>
               <div className="font-display text-base font-semibold tracking-tight text-ink">
-                Ágora
+                Atenea
               </div>
               <div className="text-[11px] uppercase tracking-[0.16em] text-ink-faint">
                 Civic Intelligence
@@ -144,7 +144,7 @@ export function LoginPage() {
                 <LogoMark width={22} height={22} />
               </div>
               <div className="font-display text-sm font-semibold tracking-tight text-ink">
-                Ágora · Civic Intelligence
+                Atenea · Civic Intelligence
               </div>
             </div>
 

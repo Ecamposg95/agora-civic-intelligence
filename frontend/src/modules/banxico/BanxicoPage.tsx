@@ -19,7 +19,7 @@ import { SERIES_ORDER, type SerieDef, type SeriePoint } from "./fixtures";
 const SERIES_COLORS: Record<string, string> = {
   SF43718: CHART_PALETTE[0], // USD/MXN exchange rate — cyan (neutral/info)
   SP1: CHART_PALETTE[3],     // Inflation — critical red (high = bad)
-  SF61745: CHART_PALETTE[1], // Target rate — amber (policy/warning tone)
+  SF61745: "rgb(var(--c-amber))", // Target rate — semantic amber (policy/warning tone)
   SP68257: CHART_PALETTE[2], // UDIS value — teal (stable/tracking)
 };
 

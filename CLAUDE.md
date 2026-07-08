@@ -1,4 +1,4 @@
-# CLAUDE.md — Ágora Civic Intelligence
+# CLAUDE.md — Atenea Civic Intelligence
 
 Developer notes for AI assistants working in this repository.
 
