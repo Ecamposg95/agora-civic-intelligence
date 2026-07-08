@@ -27,6 +27,8 @@ export function AiAnalystPage() {
     try {
       const ans: Answer = await ask(prompt);
       setTurns((t) => [...t, { role: "assistant", text: ans.text, sample: ans.sample }]);
+    } catch {
+      setTurns((t) => [...t, { role: "assistant", text: "No se pudo obtener respuesta." }]);
     } finally {
       setBusy(false);
     }
