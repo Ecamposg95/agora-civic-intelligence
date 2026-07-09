@@ -33,7 +33,11 @@ _CONVERT = Annotated[object, Depends(require_roles(
 # ── Sprints ──
 @router.post("/sprints", response_model=SprintRead, status_code=201)
 def create_sprint(data: SprintCreate, db: DbSession, ctx: CampaignCtx, _p: _GOV):
-    s = scrum_service.create_sprint(db, ctx, data); db.commit()
+    try:
+        s = scrum_service.create_sprint(db, ctx, data)
+    except scrum_service.SprintActivoExiste:
+        raise HTTPException(409, "Ya hay un sprint activo en la campaña")
+    db.commit()
     return SprintRead.model_validate(s, from_attributes=True)
 
 

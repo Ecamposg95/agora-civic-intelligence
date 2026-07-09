@@ -115,3 +115,30 @@ def test_lider_cannot_create_task_governance_tier(client):
     r = client.post(f"/api/workitems/{wid}/tareas", json={"texto": "sub-tarea"},
                     headers=lider_headers)
     assert r.status_code == 403  # tasks are governance-tier (ADMIN/COORDINADOR)
+
+
+def test_create_sprint_with_estado_activo_returns_409_if_active_exists(client):
+    coordinador_headers = _hdr(client, "coord@alpha.gov")
+
+    # Close any active sprints (DB fixture is session-scoped)
+    activos = client.get("/api/sprints?estado=ACTIVO", headers=coordinador_headers).json()["items"]
+    for s in activos:
+        client.post(f"/api/sprints/{s['id']}/cerrar", headers=coordinador_headers)
+
+    # Create and activate sprint A
+    r1 = client.post("/api/sprints",
+                     json={"nombre": "Sprint A", "fecha_inicio": "2026-07-08", "fecha_fin": "2026-07-22"},
+                     headers=coordinador_headers)
+    assert r1.status_code == 201, r1.text
+    sid_a = r1.json()["id"]
+
+    activate_resp = client.post(f"/api/sprints/{sid_a}/activar", headers=coordinador_headers)
+    assert activate_resp.status_code == 200, activate_resp.text
+
+    # Try to POST /api/sprints with estado="ACTIVO" while A is active — should return 409
+    r2 = client.post("/api/sprints",
+                     json={"nombre": "Sprint B", "fecha_inicio": "2026-07-23", "fecha_fin": "2026-08-06",
+                           "estado": "ACTIVO"},
+                     headers=coordinador_headers)
+    assert r2.status_code == 409, f"Expected 409, got {r2.status_code}: {r2.text}"
+    assert "activo" in r2.json()["error"]["message"].lower()
