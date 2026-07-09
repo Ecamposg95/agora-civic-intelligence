@@ -5,7 +5,9 @@ from sqlalchemy import select
 from app.dependencies import CampaignContext
 from app.models.minuta import Minuta, Acuerdo
 from app.models.user import User
-from app.schemas.minuta import MinutaCreate, AcuerdoUpdate, MinutaRead, MinutaUpdate
+from app.schemas.minuta import (
+    AcuerdoCreate, AcuerdoUpdate, MinutaCreate, MinutaRead, MinutaUpdate,
+)
 from app.services import minuta_service
 from tests.conftest import _militante_ctx, TestingSessionLocal, BETA_CAMPAIGN_ID
 
@@ -272,3 +274,114 @@ def test_beta_org_cannot_get_update_or_delete_alpha_minuta(
     db_session.refresh(m)
     assert m.deleted_at is None
     assert m.cuerpo != "cambio ilegal"
+
+
+# ── Service: acuerdos CRUD + transversal list ("mis acuerdos / por vencer") ──
+
+def test_acuerdo_lifecycle_and_transversal_list(db_session, coordinador_ctx):
+    m = minuta_service.create_minuta(
+        db_session, coordinador_ctx,
+        MinutaCreate(titulo="Acta", fecha="2026-07-08"))
+    a = minuta_service.add_acuerdo(
+        db_session, coordinador_ctx, m.id,
+        AcuerdoCreate(texto="Tarea", fecha_limite="2026-07-10"))
+    assert a is not None and a.estado == "PENDIENTE"
+    # org/campaign inherited from the parent minuta, not from input.
+    assert a.organization_id == m.organization_id
+    assert a.campaign_id == m.campaign_id
+    a2 = minuta_service.update_acuerdo(
+        db_session, coordinador_ctx, m.id, a.id, AcuerdoUpdate(estado="CUMPLIDO"))
+    assert a2.estado == "CUMPLIDO"
+    # lista transversal por vencimiento
+    rows, total = minuta_service.list_acuerdos(
+        db_session, coordinador_ctx, vence_antes="2026-07-31")
+    assert total == 1 and rows[0].id == a.id
+
+
+def test_add_update_delete_acuerdo_return_none_or_false_when_minuta_out_of_scope(
+        db_session, coordinador_ctx, lider_ctx):
+    # coordinador's minuta, published → campaign-wide READABLE, but líder is
+    # neither owner nor supervisor: add/update/delete must all stay out of
+    # scope (mutate-scope, not read-scope, gates acuerdo writes).
+    m = minuta_service.create_minuta(
+        db_session, coordinador_ctx,
+        MinutaCreate(titulo="Acta coordinador", fecha="2026-07-08"))
+    minuta_service.update_minuta(db_session, coordinador_ctx, m.id,
+                                 MinutaUpdate(estado="PUBLICADA"))
+    assert minuta_service.get_minuta(db_session, lider_ctx, m.id) is not None
+    assert minuta_service.add_acuerdo(
+        db_session, lider_ctx, m.id, AcuerdoCreate(texto="Intento ilegal")) is None
+
+    # Same lockout for update/delete of an acuerdo the coordinador did add.
+    a = minuta_service.add_acuerdo(
+        db_session, coordinador_ctx, m.id, AcuerdoCreate(texto="Real"))
+    assert minuta_service.update_acuerdo(
+        db_session, lider_ctx, m.id, a.id, AcuerdoUpdate(estado="CUMPLIDO")) is None
+    assert minuta_service.delete_acuerdo(db_session, lider_ctx, m.id, a.id) is False
+    db_session.refresh(a)
+    assert a.estado == "PENDIENTE" and a.deleted_at is None
+
+
+def test_update_delete_acuerdo_denied_for_non_owner_teammate(
+        db_session, activista_ctx, otro_activista_ctx):
+    m = minuta_service.create_minuta(
+        db_session, activista_ctx,
+        MinutaCreate(titulo="Nota activista 1", fecha="2026-07-08"))
+    a = minuta_service.add_acuerdo(
+        db_session, activista_ctx, m.id, AcuerdoCreate(texto="Tarea"))
+    assert minuta_service.update_acuerdo(
+        db_session, otro_activista_ctx, m.id, a.id,
+        AcuerdoUpdate(estado="CUMPLIDO")) is None
+    assert minuta_service.delete_acuerdo(
+        db_session, otro_activista_ctx, m.id, a.id) is False
+    db_session.refresh(a)
+    assert a.estado == "PENDIENTE" and a.deleted_at is None
+
+
+def test_delete_acuerdo_soft_deletes_and_is_idempotent_false(db_session, coordinador_ctx):
+    m = minuta_service.create_minuta(
+        db_session, coordinador_ctx, MinutaCreate(titulo="Acta", fecha="2026-07-08"))
+    a = minuta_service.add_acuerdo(db_session, coordinador_ctx, m.id, AcuerdoCreate(texto="Tarea"))
+    assert minuta_service.delete_acuerdo(db_session, coordinador_ctx, m.id, a.id) is True
+    assert a.deleted_at is not None
+    assert minuta_service.delete_acuerdo(db_session, coordinador_ctx, m.id, a.id) is False
+
+
+def test_list_acuerdos_transversal_scoped_by_role(
+        db_session, coordinador_ctx, lider_ctx, activista_ctx, otro_activista_ctx):
+    m = minuta_service.create_minuta(
+        db_session, coordinador_ctx, MinutaCreate(titulo="Acta", fecha="2026-07-08"))
+    a1 = minuta_service.add_acuerdo(
+        db_session, coordinador_ctx, m.id,
+        AcuerdoCreate(texto="Para activista1", responsable_id=activista_ctx.user.id))
+    a2 = minuta_service.add_acuerdo(
+        db_session, coordinador_ctx, m.id,
+        AcuerdoCreate(texto="Para activista2", responsable_id=otro_activista_ctx.user.id))
+
+    # COORDINADOR sees the whole campaign.
+    rows, total = minuta_service.list_acuerdos(db_session, coordinador_ctx)
+    assert total == 2
+
+    # LIDER sees acuerdos assigned to supervised activistas (both report to
+    # the same líder in the seed).
+    rows, total = minuta_service.list_acuerdos(db_session, lider_ctx)
+    assert total == 2 and {r.id for r in rows} == {a1.id, a2.id}
+
+    # ACTIVISTA sees only its own (responsable or created-by self).
+    rows, total = minuta_service.list_acuerdos(db_session, activista_ctx)
+    assert total == 1 and rows[0].id == a1.id
+    assert rows[0].responsable_nombre == activista_ctx.user.full_name
+
+    rows, total = minuta_service.list_acuerdos(db_session, otro_activista_ctx)
+    assert total == 1 and rows[0].id == a2.id
+
+
+def test_list_acuerdos_isolated_across_orgs(db_session, coordinador_ctx, beta_ctx):
+    minuta_service.add_acuerdo(
+        db_session, coordinador_ctx,
+        minuta_service.create_minuta(
+            db_session, coordinador_ctx,
+            MinutaCreate(titulo="Acta alpha", fecha="2026-07-08")).id,
+        AcuerdoCreate(texto="Acuerdo alpha"))
+    rows, total = minuta_service.list_acuerdos(db_session, beta_ctx)
+    assert total == 0 and rows == []
