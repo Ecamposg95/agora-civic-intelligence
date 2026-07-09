@@ -123,3 +123,13 @@ def test_task_toggle_by_assignee_and_convert_acuerdo(db_session, coordinador_ctx
     assert ac.work_item_id == new_wi.id
     with pytest.raises(scrum_service.YaConvertido):
         scrum_service.convertir_acuerdo(db_session, coordinador_ctx, m.id, ac.id)
+
+
+def test_task_toggle_denied_for_non_owner(db_session, coordinador_ctx, activista_ctx, otro_activista_ctx):
+    # workitem assigned to activista_ctx; task has no responsable → otro_activista is
+    # neither coordinator, task-owner, nor parent-owner → NoAutorizado.
+    wi = scrum_service.create_workitem(db_session, coordinador_ctx,
+        WorkItemCreate(titulo="H", story_points=3, responsable_id=activista_ctx.user.id))
+    t = scrum_service.add_task(db_session, coordinador_ctx, wi.id, TaskCreate(texto="paso"))
+    with pytest.raises(scrum_service.NoAutorizado):
+        scrum_service.update_task(db_session, otro_activista_ctx, wi.id, t.id, TaskUpdate(done=True))

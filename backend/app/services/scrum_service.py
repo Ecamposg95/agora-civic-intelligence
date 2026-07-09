@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 
 from app.core.scoping import scoped_query
 from app.dependencies import CampaignContext
-from app.models.minuta import Acuerdo
 from app.models.scrum import Sprint, WorkItem, WorkItemTask
 from app.models.user import User, UserRole
 from app.schemas.scrum import (
