@@ -42,6 +42,7 @@ from app.models.militante import Militante
 from app.models.minuta import Acuerdo, Minuta
 from app.models.operacion import AgendaItem, SeccionPlan
 from app.models.registro import Registro
+from app.models.scrum import Sprint, WorkItem, WorkItemTask
 from app.models.seccion_electoral import SeccionElectoral
 from app.models.user import User, UserRole
 
@@ -90,6 +91,9 @@ Base.metadata.create_all(
         AgendaItem.__table__,
         Minuta.__table__,
         Acuerdo.__table__,
+        Sprint.__table__,
+        WorkItem.__table__,
+        WorkItemTask.__table__,
     ],
 )
 
