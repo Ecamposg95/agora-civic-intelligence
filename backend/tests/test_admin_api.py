@@ -117,6 +117,14 @@ def test_revelar_claves_batch_mixed_and_audited(client):
     rid_without = _capture(client, "activista1@alpha.gov", nombre_completo="Sin Clave Lote")
     rid_missing = "00000000-dead-beef-0000-000000000000"
 
+    # Capture audit count before the batch call
+    aud_before = client.get(
+        "/api/admin/auditoria?action=registro.reveal_clave",
+        headers=_hdr(client, "admin@alpha.gov", ALPHA_CAMPAIGN_ID),
+    )
+    assert aud_before.status_code == 200
+    count_before = aud_before.json()["total"]
+
     h = _hdr(client, "coord@alpha.gov", ALPHA_CAMPAIGN_ID)
     resp = client.post(
         "/api/admin/registros/revelar-claves",
@@ -129,11 +137,14 @@ def test_revelar_claves_batch_mixed_and_audited(client):
     assert rid_without not in claves
     assert rid_missing not in claves
 
-    aud = client.get(
+    # Capture audit count after the batch call and assert exactly one new row
+    aud_after = client.get(
         "/api/admin/auditoria?action=registro.reveal_clave",
         headers=_hdr(client, "admin@alpha.gov", ALPHA_CAMPAIGN_ID),
     )
-    assert aud.status_code == 200 and aud.json()["total"] >= 1
+    assert aud_after.status_code == 200
+    count_after = aud_after.json()["total"]
+    assert count_after - count_before == 1, f"Expected exactly 1 new audit row, got {count_after - count_before}"
 
 
 def test_revelar_claves_batch_activista_forbidden(client):
