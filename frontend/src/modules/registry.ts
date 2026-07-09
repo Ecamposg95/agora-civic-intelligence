@@ -78,6 +78,12 @@ export const MINUTAS_READ: UserRole[] = [
 export const MINUTAS_WRITE: UserRole[] = [
   "superadmin", "admin", "coordinador", "lider",
 ];
+// Scrum/PM — governance tier (crear/estimar/asignar/mover-a-sprint workitems,
+// sprint CRUD/activar/cerrar, agregar tareas). Mirrors the backend's
+// scrum.py `_GOV` dependency (ADMIN+COORDINADOR) — narrower than MINUTAS_WRITE
+// since lider is read/move-tier only here (she can still move cards and
+// toggle tareas she's responsable for; the service enforces that, not RBAC).
+export const SCRUM_GOV: UserRole[] = ["superadmin", "admin", "coordinador"];
 
 export const SECTION_LABELS: Record<ModuleSection, string> = {
   plataforma: "Plataforma",
@@ -255,6 +261,13 @@ const MinutasList = lazy(() =>
 const MisAcuerdos = lazy(() =>
   import("@/modules/minutas/MisAcuerdosPage"),
 );
+// Scrum/PM board — /workitems/:id has no dedicated route: WorkItemDetail
+// renders as an in-page drawer from Tablero/Backlog instead (see
+// modules/scrum/WorkItemDetail.tsx), so all three scrum pages are plain
+// nav-visible routes here, unlike the minutas param routes in App.tsx.
+const Tablero = lazy(() => import("@/modules/scrum/TableroPage"));
+const Backlog = lazy(() => import("@/modules/scrum/BacklogPage"));
+const Sprints = lazy(() => import("@/modules/scrum/SprintsPage"));
 
 export const MODULES: ModuleDef[] = [
   // Plataforma (active)
@@ -294,6 +307,13 @@ export const MODULES: ModuleDef[] = [
   // directly in App.tsx (param routes must not appear as Sidebar links).
   { key: "minutas", path: "/minutas", label: "Minutas", section: "ciudadania", icon: AnalyticsIcon, state: "active", element: MinutasList, roles: MINUTAS_READ },
   { key: "acuerdos", path: "/acuerdos", label: "Acuerdos", section: "ciudadania", icon: UserIcon, state: "active", element: MisAcuerdos, roles: MINUTAS_READ },
+  // Scrum/PM — tablero/backlog/sprints. Read tier mirrors minutas (activista/
+  // capturista can view); create/estimate/assign/activar/cerrar is gated
+  // in-page to SCRUM_GOV (coordinador/admin), mover-tarjeta is open to the
+  // whole read tier with ownership enforced server-side.
+  { key: "scrum-tablero", path: "/tablero", label: "Tablero", section: "ciudadania", icon: LayersIcon, state: "active", element: Tablero, roles: MINUTAS_READ },
+  { key: "scrum-backlog", path: "/backlog", label: "Backlog", section: "ciudadania", icon: DatabaseIcon, state: "active", element: Backlog, roles: MINUTAS_READ },
+  { key: "scrum-sprints", path: "/sprints", label: "Sprints", section: "ciudadania", icon: AnalyticsIcon, state: "active", element: Sprints, roles: MINUTAS_READ },
   { key: "promovidos", path: "/promovidos", label: "Promovidos", section: "ciudadania", icon: VotersIcon, state: "active", element: Promovidos, roles: ["superadmin", "admin", "coordinador", "lider"] },
   { key: "militantes-captura", path: "/militantes/captura", label: "Afiliar militante", section: "ciudadania", icon: VotersIcon, state: "active", element: CapturaMilitante, roles: CONSOLE_CAPTURA },
   { key: "militantes", path: "/militantes", label: "Panorama afiliación", section: "ciudadania", icon: VotersIcon, state: "active", element: PanoramaMilitantes, roles: ["superadmin", "admin", "coordinador"], end: true },

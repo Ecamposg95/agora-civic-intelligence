@@ -17,6 +17,7 @@ from app.models.minuta import Acuerdo, Minuta  # noqa: F401
 from app.models.organization import Organization
 from app.models.privacy import PrivacyAcceptance, PrivacyNotice  # noqa: F401
 from app.models.registro import Registro  # noqa: F401
+from app.models.scrum import Sprint, WorkItem, WorkItemTask  # noqa: F401
 from app.models.seccion_electoral import SeccionElectoral  # noqa: F401
 from app.models.user import User
 
@@ -46,5 +47,8 @@ __all__ = [
     "PrivacyNotice",
     "Registro",
     "SeccionElectoral",
+    "Sprint",
     "User",
+    "WorkItem",
+    "WorkItemTask",
 ]
