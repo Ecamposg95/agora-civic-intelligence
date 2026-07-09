@@ -1,5 +1,8 @@
 import datetime as dt
+import pytest
+from pydantic import ValidationError
 from app.models.scrum import Sprint, WorkItem, WorkItemTask
+from app.schemas.scrum import WorkItemCreate, SprintCreate
 
 
 def test_scrum_entities_persist(db_session):
@@ -16,3 +19,15 @@ def test_scrum_entities_persist(db_session):
     db_session.add(t); db_session.flush()
     assert wi.sprint_id == s.id and wi.completed_at is None
     assert wi.origin_acuerdo_id is None and t.work_item_id == wi.id
+
+
+def test_workitem_rejects_non_fibonacci_points():
+    WorkItemCreate(titulo="H", story_points=8)          # ok
+    WorkItemCreate(titulo="H2", story_points=None)       # ok (sin estimar)
+    with pytest.raises(ValidationError):
+        WorkItemCreate(titulo="bad", story_points=4)     # 4 no es Fibonacci
+
+
+def test_sprint_create_defaults_estado():
+    s = SprintCreate(nombre="S1", fecha_inicio="2026-07-08", fecha_fin="2026-07-22")
+    assert s.estado == "PLANIFICACION"
