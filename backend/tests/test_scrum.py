@@ -3,6 +3,7 @@ import pytest
 from pydantic import ValidationError
 from app.models.scrum import Sprint, WorkItem, WorkItemTask
 from app.schemas.scrum import WorkItemCreate, SprintCreate
+from app.services import scrum_service
 
 
 def test_scrum_entities_persist(db_session):
@@ -31,3 +32,16 @@ def test_workitem_rejects_non_fibonacci_points():
 def test_sprint_create_defaults_estado():
     s = SprintCreate(nombre="S1", fecha_inicio="2026-07-08", fecha_fin="2026-07-22")
     assert s.estado == "PLANIFICACION"
+
+
+def test_only_one_active_sprint(db_session, coordinador_ctx):
+    s1 = scrum_service.create_sprint(db_session, coordinador_ctx,
+        SprintCreate(nombre="S1", fecha_inicio="2026-07-08", fecha_fin="2026-07-22"))
+    s2 = scrum_service.create_sprint(db_session, coordinador_ctx,
+        SprintCreate(nombre="S2", fecha_inicio="2026-07-23", fecha_fin="2026-08-06"))
+    scrum_service.activar_sprint(db_session, coordinador_ctx, s1.id)
+    with pytest.raises(scrum_service.SprintActivoExiste):
+        scrum_service.activar_sprint(db_session, coordinador_ctx, s2.id)
+    assert scrum_service.active_sprint(db_session, coordinador_ctx).id == s1.id
+    scrum_service.cerrar_sprint(db_session, coordinador_ctx, s1.id)
+    assert scrum_service.active_sprint(db_session, coordinador_ctx) is None
