@@ -13,11 +13,13 @@ from sqlalchemy.orm import Session
 
 from app.core.scoping import scoped_query
 from app.dependencies import CampaignContext
+from app.models.minuta import Acuerdo
 from app.models.scrum import Sprint, WorkItem, WorkItemTask
 from app.models.user import User, UserRole
 from app.schemas.scrum import (
-    SprintCreate, SprintUpdate, WorkItemCreate, WorkItemUpdate,
+    SprintCreate, SprintUpdate, TaskCreate, TaskUpdate, WorkItemCreate, WorkItemUpdate,
 )
+from app.services import minuta_service
 from app.services.audit_service import record_audit
 
 
@@ -265,3 +267,90 @@ def board(db: Session, ctx: CampaignContext) -> dict:
         if wi.estado in cols:
             cols[wi.estado].append(wi)
     return cols
+
+
+class YaConvertido(Exception):
+    """Raised when converting an acuerdo that already has a work_item_id."""
+
+
+def _task_in_scope(db: Session, ctx: CampaignContext, wid: str, tid: str) -> Optional[WorkItemTask]:
+    wi = db.execute(scoped_query(WorkItem, ctx).where(WorkItem.id == wid)).scalar_one_or_none()
+    if wi is None:
+        return None
+    return db.execute(
+        scoped_query(WorkItemTask, ctx).where(
+            WorkItemTask.id == tid, WorkItemTask.work_item_id == wid)
+    ).scalar_one_or_none()
+
+
+def add_task(db: Session, ctx: CampaignContext, wid: str, data: TaskCreate) -> Optional[WorkItemTask]:
+    wi = db.execute(scoped_query(WorkItem, ctx).where(WorkItem.id == wid)).scalar_one_or_none()
+    if wi is None:
+        return None
+    t = WorkItemTask(organization_id=wi.organization_id, campaign_id=wi.campaign_id,
+                     work_item_id=wi.id, texto=data.texto, done=False,
+                     orden=data.orden, responsable_id=data.responsable_id,
+                     created_by=ctx.user.id)
+    db.add(t)
+    record_audit(db, action="task.create", actor_id=ctx.user.id,
+                 organization_id=ctx.organization_id, entity_type="task",
+                 entity_id=t.id, meta={"work_item_id": wi.id})
+    db.flush()
+    return t
+
+
+def update_task(db: Session, ctx: CampaignContext, wid: str, tid: str,
+                data: TaskUpdate) -> Optional[WorkItemTask]:
+    t = _task_in_scope(db, ctx, wid, tid)
+    if t is None:
+        return None
+    if not _is_coordinator(ctx):
+        wi = db.execute(scoped_query(WorkItem, ctx).where(WorkItem.id == wid)).scalar_one_or_none()
+        owner = ctx.user.id in (t.responsable_id, (wi.responsable_id if wi else None))
+        if not owner:
+            raise NoAutorizado()
+    for k, v in data.model_dump(exclude_unset=True).items():
+        setattr(t, k, v)
+    t.updated_by = ctx.user.id
+    record_audit(db, action="task.update", actor_id=ctx.user.id,
+                 organization_id=ctx.organization_id, entity_type="task",
+                 entity_id=t.id, meta={"done": t.done})
+    db.flush()
+    return t
+
+
+def delete_task(db: Session, ctx: CampaignContext, wid: str, tid: str) -> bool:
+    t = _task_in_scope(db, ctx, wid, tid)
+    if t is None:
+        return False
+    t.deleted_at = datetime.now(timezone.utc)
+    t.updated_by = ctx.user.id
+    record_audit(db, action="task.delete", actor_id=ctx.user.id,
+                 organization_id=ctx.organization_id, entity_type="task",
+                 entity_id=t.id, meta=None)
+    db.flush()
+    return True
+
+
+def convertir_acuerdo(db: Session, ctx: CampaignContext, mid: str, aid: str) -> Optional[WorkItem]:
+    # Reuse module A's mutate-scope gate on the acuerdo (actor must be able to
+    # write it); None → 404 at the router.
+    ac = minuta_service._acuerdo_in_scope(db, ctx, mid, aid)
+    if ac is None:
+        return None
+    if ac.work_item_id:
+        raise YaConvertido()
+    wi = WorkItem(organization_id=ac.organization_id, campaign_id=ac.campaign_id,
+                  titulo=ac.texto[:255], tipo="HISTORIA", estado="POR_HACER",
+                  prioridad="MEDIA", orden=0, responsable_id=ac.responsable_id,
+                  origin_acuerdo_id=ac.id, created_by=ctx.user.id)
+    db.add(wi)
+    db.flush()
+    ac.work_item_id = wi.id
+    ac.updated_by = ctx.user.id
+    record_audit(db, action="acuerdo.convertir", actor_id=ctx.user.id,
+                 organization_id=ctx.organization_id, entity_type="workitem",
+                 entity_id=wi.id, meta={"acuerdo_id": ac.id})
+    db.flush()
+    enrich_workitem(db, wi)
+    return wi

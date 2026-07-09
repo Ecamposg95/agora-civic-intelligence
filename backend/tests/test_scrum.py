@@ -3,8 +3,9 @@ import pytest
 from pydantic import ValidationError
 from app.models.scrum import Sprint, WorkItem, WorkItemTask
 from app.models.user import User
-from app.schemas.scrum import WorkItemCreate, SprintCreate, SprintUpdate
-from app.services import scrum_service
+from app.schemas.scrum import WorkItemCreate, SprintCreate, SprintUpdate, TaskCreate, TaskUpdate
+from app.schemas.minuta import MinutaCreate
+from app.services import scrum_service, minuta_service
 
 
 def test_scrum_entities_persist(db_session):
@@ -103,3 +104,22 @@ def test_activista_cannot_create_workitem_via_service_is_governance(db_session, 
     scrum_service.create_workitem(db_session, coordinador_ctx, WorkItemCreate(titulo="A", story_points=8))
     b = scrum_service.board(db_session, coordinador_ctx)
     assert "POR_HACER" in b and "EN_CURSO" in b and "HECHO" in b
+
+
+def test_task_toggle_by_assignee_and_convert_acuerdo(db_session, coordinador_ctx, activista_ctx):
+    wi = scrum_service.create_workitem(db_session, coordinador_ctx,
+        WorkItemCreate(titulo="H", story_points=5, responsable_id=activista_ctx.user.id))
+    t = scrum_service.add_task(db_session, coordinador_ctx, wi.id, TaskCreate(texto="paso 1"))
+    done = scrum_service.update_task(db_session, activista_ctx, wi.id, t.id, TaskUpdate(done=True))
+    assert done.done is True
+    # convert an acuerdo (from a minuta) into a WorkItem
+    m = minuta_service.create_minuta(db_session, coordinador_ctx,
+        MinutaCreate(titulo="Acta", fecha="2026-07-08",
+                     acuerdos=[{"texto": "Comprar lonas"}]))
+    ac = m.acuerdos[0]
+    new_wi = scrum_service.convertir_acuerdo(db_session, coordinador_ctx, m.id, ac.id)
+    assert new_wi.origin_acuerdo_id == ac.id and new_wi.titulo == "Comprar lonas"
+    db_session.refresh(ac)
+    assert ac.work_item_id == new_wi.id
+    with pytest.raises(scrum_service.YaConvertido):
+        scrum_service.convertir_acuerdo(db_session, coordinador_ctx, m.id, ac.id)
