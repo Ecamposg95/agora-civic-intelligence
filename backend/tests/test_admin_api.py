@@ -105,6 +105,81 @@ def test_reveal_out_of_scope_returns_404(client):
     assert resp.status_code == 404
 
 
+# ---------------------------------------------------------------------------
+# Batch reveal — POST /admin/registros/revelar-claves
+# ---------------------------------------------------------------------------
+
+def test_revelar_claves_batch_mixed_and_audited(client):
+    """Coordinator batch-reveals a mix of ids: some with clave, some without,
+    some out-of-scope/nonexistent. Only in-scope ids WITH a clave come back."""
+    rid_with = _capture(client, "activista1@alpha.gov", nombre_completo="Con Clave Lote",
+                        clave_elector="PRLPAN80010112M400")
+    rid_without = _capture(client, "activista1@alpha.gov", nombre_completo="Sin Clave Lote")
+    rid_missing = "00000000-dead-beef-0000-000000000000"
+
+    # Capture audit count before the batch call
+    aud_before = client.get(
+        "/api/admin/auditoria?action=registro.reveal_clave",
+        headers=_hdr(client, "admin@alpha.gov", ALPHA_CAMPAIGN_ID),
+    )
+    assert aud_before.status_code == 200
+    count_before = aud_before.json()["total"]
+
+    h = _hdr(client, "coord@alpha.gov", ALPHA_CAMPAIGN_ID)
+    resp = client.post(
+        "/api/admin/registros/revelar-claves",
+        json={"registro_ids": [rid_with, rid_without, rid_missing]},
+        headers=h,
+    )
+    assert resp.status_code == 200, resp.text
+    claves = resp.json()["claves"]
+    assert claves == {rid_with: "PRLPAN80010112M400"}
+    assert rid_without not in claves
+    assert rid_missing not in claves
+
+    # Capture audit count after the batch call and assert exactly one new row
+    aud_after = client.get(
+        "/api/admin/auditoria?action=registro.reveal_clave",
+        headers=_hdr(client, "admin@alpha.gov", ALPHA_CAMPAIGN_ID),
+    )
+    assert aud_after.status_code == 200
+    count_after = aud_after.json()["total"]
+    assert count_after - count_before == 1, f"Expected exactly 1 new audit row, got {count_after - count_before}"
+
+
+def test_revelar_claves_batch_activista_forbidden(client):
+    rid = _capture(client, "activista1@alpha.gov", nombre_completo="Lote Forbidden",
+                   clave_elector="ABCD1234567890XYZ8")
+    h = _hdr(client, "activista1@alpha.gov", ALPHA_CAMPAIGN_ID)
+    resp = client.post(
+        "/api/admin/registros/revelar-claves",
+        json={"registro_ids": [rid]},
+        headers=h,
+    )
+    assert resp.status_code == 403
+
+
+def test_revelar_claves_batch_out_of_scope_silently_skipped(client):
+    """A BETA registro is out of scope for an ALPHA coordinador — silently skipped,
+    not an error, and absent from the response."""
+    beta_h = _hdr(client, "activista_beta@beta.gov", BETA_CAMPAIGN_ID)
+    cap = client.post("/api/registros", json={
+        "consentimiento": True, "nombre_completo": "Beta Lote",
+        "clave_elector": "BETA1234567890XYZ8",
+    }, headers=beta_h)
+    assert cap.status_code == 201, cap.text
+    beta_rid = cap.json()["id"]
+
+    h = _hdr(client, "coord@alpha.gov", ALPHA_CAMPAIGN_ID)
+    resp = client.post(
+        "/api/admin/registros/revelar-claves",
+        json={"registro_ids": [beta_rid]},
+        headers=h,
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["claves"] == {}
+
+
 def test_superadmin_consolidated_no_base(client):
     _capture(client, "activista1@alpha.gov", nombre_completo="Alpha row")
     # superadmin WITHOUT X-Campaign-Id → consolidated
