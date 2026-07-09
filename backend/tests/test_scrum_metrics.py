@@ -26,12 +26,22 @@ def test_sprint_metrics(db_session, coordinador_ctx):
 
 
 def test_velocidad_only_closed_sprints(db_session, coordinador_ctx):
+    """Order-independent: asserts on THIS test's own sprint, not global state.
+
+    Other test modules (notably test_scrum_api.py, via the `client` fixture's
+    separate DB session) may leave other CERRADO sprints in the shared SQLite
+    DB depending on run order/selection. So this must not assume the velocidad
+    list is empty before closing — only that THIS sprint's id is absent before
+    close and present (with the right value) after.
+    """
     s = _sprint_with_items(db_session, coordinador_ctx, "2026-06-01", "2026-06-15")
     # abierto → no aparece
-    assert scrum_service.velocidad(db_session, coordinador_ctx, n=6) == []
+    ids_before = [v["sprint_id"] for v in scrum_service.velocidad(db_session, coordinador_ctx, n=24)]
+    assert s.id not in ids_before
     scrum_service.cerrar_sprint(db_session, coordinador_ctx, s.id)
-    vel = scrum_service.velocidad(db_session, coordinador_ctx, n=6)
-    assert len(vel) == 1 and vel[0]["velocidad"] == 13
+    vel = scrum_service.velocidad(db_session, coordinador_ctx, n=24)
+    entry = next(v for v in vel if v["sprint_id"] == s.id)
+    assert entry["velocidad"] == 13
 
 
 def test_burndown_series(db_session, coordinador_ctx):

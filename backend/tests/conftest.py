@@ -281,7 +281,10 @@ def db_session():
     """A TestingSessionLocal session that purges militante rows on teardown.
 
     Militantes and their privacy-acceptance rows are deleted after each test so
-    folio counters and total-count assertions do not leak between tests.
+    folio counters and total-count assertions do not leak between tests. Scrum
+    table cleanup lives in the session-independent ``_cleanup_scrum_tables``
+    autouse fixture below (it must also cover rows created via the ``client``
+    fixture's separate DB session, which this fixture's teardown never sees).
     """
     db = TestingSessionLocal()
     try:
@@ -290,10 +293,31 @@ def db_session():
         db.rollback()
         db.query(Militante).delete()
         db.query(PrivacyAcceptance).delete()
+        db.commit()
+        db.close()
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_scrum_tables():
+    """Purge scrum tables after every test, regardless of which DB session wrote them.
+
+    Sprints/WorkItems/WorkItemTasks may be created either via the ``db_session``
+    fixture or via the ``client`` fixture's own ``_override_get_db`` session
+    (e.g. test_scrum_api.py). Those are different sessions against the same
+    shared SQLite engine, so cleanup must happen here — in a fresh session,
+    after the test body runs — rather than in db_session's own teardown, which
+    only ever sees rows it wrote itself. FK-safe order: tasks -> items -> sprints.
+    Only these three tables are touched; seeded users/orgs/campaigns/electoral
+    areas are untouched.
+    """
+    yield
+    db = TestingSessionLocal()
+    try:
         db.query(WorkItemTask).delete()
         db.query(WorkItem).delete()
         db.query(Sprint).delete()
         db.commit()
+    finally:
         db.close()
 
 
