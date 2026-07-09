@@ -13,6 +13,7 @@ from app.models.census import CensusMetric  # noqa: F401
 from app.models.electoral_area import ElectoralArea
 from app.models.ingestion import DataSource, IngestRun  # noqa: F401
 from app.models.militante import Militante  # noqa: F401
+from app.models.minuta import Acuerdo, Minuta  # noqa: F401
 from app.models.organization import Organization
 from app.models.privacy import PrivacyAcceptance, PrivacyNotice  # noqa: F401
 from app.models.registro import Registro  # noqa: F401
@@ -20,6 +21,7 @@ from app.models.seccion_electoral import SeccionElectoral  # noqa: F401
 from app.models.user import User
 
 __all__ = [
+    "Acuerdo",
     "ArcoRequest",
     "AuditLog",
     "Campaign",
@@ -37,6 +39,7 @@ __all__ = [
     "FormResponse",
     "IngestRun",
     "Militante",
+    "Minuta",
     "Organization",
     "Party",
     "PrivacyAcceptance",
