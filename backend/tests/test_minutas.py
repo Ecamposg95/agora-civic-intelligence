@@ -1,5 +1,8 @@
 import datetime as dt
+import pytest
+from pydantic import ValidationError
 from app.models.minuta import Minuta, Acuerdo
+from app.schemas.minuta import MinutaCreate, AcuerdoUpdate
 
 
 def test_minuta_and_acuerdo_persist(db_session):
@@ -22,3 +25,16 @@ def test_minuta_and_acuerdo_persist(db_session):
     assert m.id and a.minuta_id == m.id
     assert m.estado == "BORRADOR" and a.estado == "PENDIENTE"
     assert a.work_item_id is None
+
+
+def test_minuta_create_validates_estado_and_tipo():
+    m = MinutaCreate(titulo="Junta", fecha=dt.date(2026, 7, 8), tipo="REUNION")
+    assert m.estado == "BORRADOR"
+    with pytest.raises(ValidationError):
+        MinutaCreate(titulo="x", fecha=dt.date(2026, 7, 8), tipo="INVALIDO")
+
+
+def test_acuerdo_update_rejects_bad_estado():
+    AcuerdoUpdate(estado="CUMPLIDO")
+    with pytest.raises(ValidationError):
+        AcuerdoUpdate(estado="ARCHIVADO")
