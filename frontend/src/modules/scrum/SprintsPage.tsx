@@ -16,7 +16,7 @@ import { DataState } from "@/components/ui/DataState";
 import { SkeletonRows } from "@/components/ui/SkeletonCard";
 import { useAsync } from "@/hooks/useAsync";
 import { CHART_PALETTE, CHART_TOOLTIP_STYLE } from "@/constants/ui";
-import { SCRUM_GOV } from "@/modules/registry";
+import { MINUTAS_WRITE, SCRUM_GOV } from "@/modules/registry";
 import { useAuthStore } from "@/store/authStore";
 import {
   activarSprint,
@@ -73,6 +73,7 @@ const EMPTY_FORM = { nombre: "", objetivo: "", fecha_inicio: today(), fecha_fin:
 export function SprintsPage() {
   const role = useAuthStore((s) => s.user?.role);
   const canGovern = role ? SCRUM_GOV.includes(role) : false;
+  const canCeremonia = role ? MINUTAS_WRITE.includes(role) : false;
 
   const state = useAsync(() => listSprints({ limit: 100, offset: 0 }), []);
   const sprints = state.data?.items ?? [];
@@ -285,7 +286,7 @@ export function SprintsPage() {
                   )}
                 </div>
               </div>
-              {expandedId === s.id && <SprintDetail sprintId={s.id} canGovern={canGovern} />}
+              {expandedId === s.id && <SprintDetail sprintId={s.id} canCeremonia={canCeremonia} />}
             </li>
           ))}
         </ul>
@@ -300,7 +301,7 @@ export function SprintsPage() {
  * ceremonia" form gated to canGovern (mirrors the sprint governance tier —
  * the backend requires ADMIN/COORDINADOR/LIDER to POST /sprints/:id/ceremonias).
  */
-function SprintDetail({ sprintId, canGovern }: { sprintId: string; canGovern: boolean }) {
+function SprintDetail({ sprintId, canCeremonia }: { sprintId: string; canCeremonia: boolean }) {
   const metricsState = useAsync(() => getSprintMetrics(sprintId), [sprintId]);
   const burndownState = useAsync(() => getBurndown(sprintId), [sprintId]);
   const ceremoniasState = useAsync(() => listCeremonias(sprintId), [sprintId]);
@@ -426,14 +427,14 @@ function SprintDetail({ sprintId, canGovern }: { sprintId: string; canGovern: bo
       <div>
         <div className="flex items-center justify-between">
           <h4 className="text-xs font-semibold uppercase tracking-wider text-ink-muted">Ceremonias</h4>
-          {canGovern && (
+          {canCeremonia && (
             <button type="button" className="btn-ghost focus-ring text-xs" onClick={() => setShowForm((v) => !v)}>
               {showForm ? "Cancelar" : "Nueva ceremonia"}
             </button>
           )}
         </div>
 
-        {showForm && canGovern && (
+        {showForm && canCeremonia && (
           <div className="reveal mt-3 flex flex-col gap-3 rounded-lg border border-line bg-bg-sunken p-3">
             {formError && <p className="text-sm text-state-critical">{formError}</p>}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
