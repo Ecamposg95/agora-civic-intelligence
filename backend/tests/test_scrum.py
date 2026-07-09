@@ -1,6 +1,7 @@
 import datetime as dt
 import pytest
 from pydantic import ValidationError
+from app.models.audit_log import AuditLog
 from app.models.scrum import Sprint, WorkItem, WorkItemTask
 from app.models.user import User
 from app.schemas.scrum import WorkItemCreate, SprintCreate, SprintUpdate, TaskCreate, TaskUpdate
@@ -133,3 +134,19 @@ def test_task_toggle_denied_for_non_owner(db_session, coordinador_ctx, activista
     t = scrum_service.add_task(db_session, coordinador_ctx, wi.id, TaskCreate(texto="paso"))
     with pytest.raises(scrum_service.NoAutorizado):
         scrum_service.update_task(db_session, otro_activista_ctx, wi.id, t.id, TaskUpdate(done=True))
+
+
+def test_create_sprint_audit_row_has_entity_id(db_session, coordinador_ctx):
+    sprint = scrum_service.create_sprint(db_session, coordinador_ctx,
+        SprintCreate(nombre="S1", fecha_inicio="2026-07-08", fecha_fin="2026-07-22"))
+    row = db_session.query(AuditLog).filter(AuditLog.action == "sprint.create").one()
+    assert row.entity_id == sprint.id
+    assert row.entity_id is not None
+
+
+def test_create_workitem_audit_row_has_entity_id(db_session, coordinador_ctx):
+    wi = scrum_service.create_workitem(db_session, coordinador_ctx,
+        WorkItemCreate(titulo="H", story_points=5))
+    row = db_session.query(AuditLog).filter(AuditLog.action == "workitem.create").one()
+    assert row.entity_id == wi.id
+    assert row.entity_id is not None

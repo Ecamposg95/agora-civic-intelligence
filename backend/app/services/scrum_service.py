@@ -46,6 +46,7 @@ def create_sprint(db: Session, ctx: CampaignContext, data: SprintCreate) -> Spri
                fecha_inicio=data.fecha_inicio, fecha_fin=data.fecha_fin,
                estado=data.estado, created_by=ctx.user.id)
     db.add(s)
+    db.flush()
     record_audit(db, action="sprint.create", actor_id=ctx.user.id,
                  organization_id=ctx.organization_id, entity_type="sprint",
                  entity_id=s.id, meta={"nombre": s.nombre})
@@ -165,6 +166,7 @@ def create_workitem(db: Session, ctx: CampaignContext, data: WorkItemCreate) -> 
                   prioridad=data.prioridad, orden=data.orden, sprint_id=data.sprint_id,
                   responsable_id=data.responsable_id, created_by=ctx.user.id)
     db.add(wi)
+    db.flush()
     record_audit(db, action="workitem.create", actor_id=ctx.user.id,
                  organization_id=ctx.organization_id, entity_type="workitem",
                  entity_id=wi.id, meta={"tipo": wi.tipo})
@@ -291,6 +293,7 @@ def add_task(db: Session, ctx: CampaignContext, wid: str, data: TaskCreate) -> O
                      orden=data.orden, responsable_id=data.responsable_id,
                      created_by=ctx.user.id)
     db.add(t)
+    db.flush()
     record_audit(db, action="task.create", actor_id=ctx.user.id,
                  organization_id=ctx.organization_id, entity_type="task",
                  entity_id=t.id, meta={"work_item_id": wi.id})

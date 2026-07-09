@@ -45,7 +45,6 @@ export interface WorkItemPatch {
   orden?: number;
   sprint_id?: string | null;
   responsable_id?: string | null;
-  estado?: string;
 }
 export const updateWorkitem = async (id: string, p: WorkItemPatch) => (await apiClient.patch<WorkItem>(`/workitems/${id}`, p)).data;
 export const moverEstado = async (id: string, estado: string) => (await apiClient.patch<WorkItem>(`/workitems/${id}/estado`, { estado })).data;
