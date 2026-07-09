@@ -104,7 +104,8 @@ def create_minuta(db: Session, ctx: CampaignContext, data: MinutaCreate) -> Minu
         titulo=data.titulo, fecha=data.fecha, lugar=data.lugar,
         tipo=data.tipo, estado=data.estado,
         asistentes=[a.model_dump() for a in data.asistentes],
-        cuerpo=data.cuerpo, area_id=data.area_id, created_by=ctx.user.id,
+        cuerpo=data.cuerpo, area_id=data.area_id, sprint_id=data.sprint_id,
+        created_by=ctx.user.id,
     )
     db.add(m)
     db.flush()
@@ -125,7 +126,7 @@ def create_minuta(db: Session, ctx: CampaignContext, data: MinutaCreate) -> Minu
 
 def list_minutas(db: Session, ctx: CampaignContext, *, tipo=None, estado=None,
                  desde: Optional[date] = None, hasta: Optional[date] = None,
-                 limit=50, offset=0) -> tuple[list[Minuta], int]:
+                 sprint_id=None, limit=50, offset=0) -> tuple[list[Minuta], int]:
     stmt = _minuta_role_scoped(ctx)
     if tipo:
         stmt = stmt.where(Minuta.tipo == tipo)
@@ -135,6 +136,8 @@ def list_minutas(db: Session, ctx: CampaignContext, *, tipo=None, estado=None,
         stmt = stmt.where(Minuta.fecha >= desde)
     if hasta:
         stmt = stmt.where(Minuta.fecha <= hasta)
+    if sprint_id is not None:
+        stmt = stmt.where(Minuta.sprint_id == sprint_id)
     total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
     ordered = stmt.order_by(Minuta.fecha.desc(), Minuta.created_at.desc())
     rows = list(db.execute(ordered.limit(limit).offset(offset)).scalars().all())

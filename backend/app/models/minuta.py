@@ -32,6 +32,8 @@ class Minuta(UUIDMixin, TenantMixin, CampaignMixin, AuditMixin, Base):
     estado: Mapped[str] = mapped_column(String(20), nullable=False, default="BORRADOR")
     area_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("electoral_areas.id", ondelete="SET NULL"), nullable=True)
+    sprint_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("sprints.id", ondelete="SET NULL"), nullable=True, index=True)
 
 
 class Acuerdo(UUIDMixin, TenantMixin, CampaignMixin, AuditMixin, Base):
