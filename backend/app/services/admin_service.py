@@ -54,6 +54,33 @@ def reveal_clave(db: Session, ctx: CampaignContext, registro_id: str) -> Optiona
     return plain
 
 
+def reveal_claves(db: Session, ctx: CampaignContext, registro_ids: list[str]) -> dict[str, str]:
+    """Batch reveal. For each in-scope registro that has a stored clave, decrypt it
+    and write ONE audit row per revealed registro (registro.reveal_clave,
+    meta={"batch": True}). Registros that are out of scope or have no clave are
+    silently skipped (not errors). Returns {registro_id: clave_plaintext} only
+    for successfully revealed ones. Single db.commit() at the end.
+    """
+    claves: dict[str, str] = {}
+    for rid in dict.fromkeys(registro_ids):  # dedupe, preserve order
+        reg = registro_service.get_registro(db, ctx, rid)
+        if reg is None or not reg.clave_elector_enc:
+            continue
+        plain = crypto.decrypt_clave(bytes(reg.clave_elector_enc))
+        record_audit(
+            db,
+            action="registro.reveal_clave",
+            actor_id=ctx.user.id,
+            organization_id=reg.organization_id,
+            entity_type="registro",
+            entity_id=reg.id,
+            meta={"batch": True},
+        )
+        claves[reg.id] = plain
+    db.commit()
+    return claves
+
+
 def list_admin_registros(
     db: Session,
     ctx: CampaignContext,

@@ -12,6 +12,8 @@ from app.schemas.admin import (
     EstructuraNode,
     MetricsRead,
     RevelarClaveResponse,
+    RevelarClavesRequest,
+    RevelarClavesResponse,
 )
 from app.schemas.audit import AuditEntry
 from app.schemas.pagination import Page
@@ -63,6 +65,16 @@ def metricas(db: DbSession, ctx: AdminCtx, _perm: ConsoleCtx) -> MetricsRead:
 @router.get("/estructura", response_model=list[EstructuraNode])
 def estructura(db: DbSession, ctx: AdminCtx, _perm: ConsoleCtx) -> list[EstructuraNode]:
     return [EstructuraNode(**n) for n in admin_service.estructura(db, ctx)]
+
+
+@router.post("/registros/revelar-claves", response_model=RevelarClavesResponse)
+def revelar_claves(
+    payload: RevelarClavesRequest,
+    db: DbSession,
+    ctx: AdminCtx,
+    _perm: RevealCtx,
+) -> RevelarClavesResponse:
+    return RevelarClavesResponse(claves=admin_service.reveal_claves(db, ctx, payload.registro_ids))
 
 
 @router.post("/registros/{registro_id}/revelar-clave", response_model=RevelarClaveResponse)

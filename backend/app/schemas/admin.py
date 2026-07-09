@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class AdminRegistroRead(BaseModel):
@@ -81,3 +81,11 @@ class EstructuraNode(BaseModel):
 class RevelarClaveResponse(BaseModel):
     registro_id: str
     clave_elector: str  # decrypted — never logged, never cached
+
+
+class RevelarClavesRequest(BaseModel):
+    registro_ids: list[str] = Field(min_length=1, max_length=500)
+
+
+class RevelarClavesResponse(BaseModel):
+    claves: dict[str, str]  # registro_id -> clave_elector (decrypted); missing/no-clave ids omitted
