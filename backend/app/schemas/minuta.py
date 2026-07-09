@@ -63,6 +63,7 @@ class MinutaCreate(BaseModel):
     asistentes: list[Asistente] = Field(default_factory=list)
     cuerpo: Optional[str] = None
     area_id: Optional[str] = None
+    sprint_id: Optional[str] = None
     acuerdos: list[AcuerdoCreate] = Field(default_factory=list)
 
 
@@ -75,6 +76,7 @@ class MinutaUpdate(BaseModel):
     asistentes: Optional[list[Asistente]] = None
     cuerpo: Optional[str] = None
     area_id: Optional[str] = None
+    sprint_id: Optional[str] = None
 
 
 class MinutaRead(BaseModel):
@@ -89,6 +91,7 @@ class MinutaRead(BaseModel):
     asistentes: list[Asistente] = Field(default_factory=list)
     cuerpo: Optional[str] = None
     area_id: Optional[str] = None
+    sprint_id: Optional[str] = None
     created_at: datetime
     created_by: Optional[str] = None
     acuerdos: list[AcuerdoRead] = Field(default_factory=list)

@@ -385,3 +385,17 @@ def test_list_acuerdos_isolated_across_orgs(db_session, coordinador_ctx, beta_ct
         AcuerdoCreate(texto="Acuerdo alpha"))
     rows, total = minuta_service.list_acuerdos(db_session, beta_ctx)
     assert total == 0 and rows == []
+
+
+# ── Sub-proyecto B: Minuta.sprint_id (link ceremony minuta to a sprint) ──────
+
+def test_minuta_sprint_id_persists_and_filters(db_session, coordinador_ctx):
+    from app.schemas.minuta import MinutaCreate
+    from app.services import minuta_service
+    m1 = minuta_service.create_minuta(db_session, coordinador_ctx,
+        MinutaCreate(titulo="Planning", fecha="2026-07-08", tipo="PLANNING", sprint_id="sprint-xyz"))
+    m2 = minuta_service.create_minuta(db_session, coordinador_ctx,
+        MinutaCreate(titulo="Reunión suelta", fecha="2026-07-08", tipo="REUNION"))
+    assert m1.sprint_id == "sprint-xyz" and m2.sprint_id is None
+    rows, total = minuta_service.list_minutas(db_session, coordinador_ctx, sprint_id="sprint-xyz")
+    assert total == 1 and rows[0].id == m1.id
