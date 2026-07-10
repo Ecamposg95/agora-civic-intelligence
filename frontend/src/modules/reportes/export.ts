@@ -1,5 +1,5 @@
 // frontend/src/modules/reportes/export.ts
-import type { AnalyticsOverview } from "@/types/analytics";
+import type { ExecutiveDashboard } from "@/api/dashboard";
 
 /** A labelled row destined for the CSV briefing. */
 interface CsvRow {
@@ -26,52 +26,60 @@ export function fileDate(date: Date = new Date()): string {
 }
 
 /**
- * Serialize the executive briefing (KPIs + breakdowns) into CSV rows.
- * Pure: only real values from the overview payload and the live state count.
+ * Serialize the campaign executive briefing (KPIs + breakdowns) into CSV rows.
+ * Pure: only real values from the executive-dashboard payload.
  */
-export function briefingToCsvRows(
-  overview: AnalyticsOverview,
-  stateCount: number | null,
-): CsvRow[] {
+export function briefingToCsvRows(dashboard: ExecutiveDashboard): CsvRow[] {
   const rows: CsvRow[] = [];
 
   // KPI summary
-  rows.push({ section: "Resumen", label: "Áreas electorales", value: overview.summary.electoral_areas });
-  rows.push({ section: "Resumen", label: "Organizaciones", value: overview.summary.organizations });
-  rows.push({ section: "Resumen", label: "Usuarios", value: overview.summary.users });
-  rows.push({ section: "Resumen", label: "Fuentes de datos", value: overview.summary.data_sources });
-  if (stateCount !== null) {
-    rows.push({ section: "Resumen", label: "Entidades (cartografía estatal)", value: stateCount });
+  rows.push({ section: "Resumen", label: "Promovidos — total", value: dashboard.promovidos.total });
+  if (dashboard.promovidos.meta != null) {
+    rows.push({ section: "Resumen", label: "Promovidos — meta", value: dashboard.promovidos.meta });
+  }
+  if (dashboard.promovidos.pct != null) {
+    rows.push({ section: "Resumen", label: "Promovidos — % de meta", value: dashboard.promovidos.pct });
+  }
+  rows.push({ section: "Resumen", label: "Afiliados — total", value: dashboard.afiliados.total });
+  rows.push({ section: "Resumen", label: "Afiliados — validados", value: dashboard.afiliados.validados });
+  if (dashboard.afiliados.meta != null) {
+    rows.push({ section: "Resumen", label: "Afiliados — meta", value: dashboard.afiliados.meta });
+  }
+  rows.push({ section: "Resumen", label: "Casos — total", value: dashboard.casos.total });
+  rows.push({ section: "Resumen", label: "Casos — abiertos", value: dashboard.casos.abiertos });
+  rows.push({ section: "Resumen", label: "Casos — SLA vencidos", value: dashboard.casos.sla_vencidos });
+  rows.push({ section: "Resumen", label: "Cobertura — secciones", value: dashboard.cobertura.secciones });
+  rows.push({ section: "Resumen", label: "Cobertura — al día", value: dashboard.cobertura.al_dia });
+  rows.push({ section: "Resumen", label: "Cobertura — en riesgo", value: dashboard.cobertura.en_riesgo });
+  if (dashboard.cobertura.pct_global != null) {
+    rows.push({ section: "Resumen", label: "Cobertura — % global", value: dashboard.cobertura.pct_global });
+  }
+  if (dashboard.election_date) {
+    rows.push({ section: "Resumen", label: "Fecha de elección", value: dashboard.election_date });
   }
 
-  // Coverage by level
-  for (const c of overview.coverage) {
-    rows.push({ section: "Cobertura por nivel", label: c.level, value: c.count });
+  // Weekly capture trend
+  for (const p of dashboard.tendencia) {
+    rows.push({ section: "Tendencia semanal (promovidos)", label: p.semana, value: p.promovidos });
   }
 
-  // Activity trend
-  for (const p of overview.trends.activity) {
-    rows.push({ section: "Tendencia de actividad", label: p.period, value: p.value });
+  // Top secciones by promovidos
+  for (const s of dashboard.por_seccion_top) {
+    rows.push({ section: "Top secciones por promovidos", label: s.seccion, value: s.promovidos });
   }
 
-  // Top actions
-  for (const a of overview.by_action) {
-    rows.push({ section: "Acciones principales", label: a.action, value: a.count });
+  // Casos por estado
+  for (const c of dashboard.casos_por_estado) {
+    rows.push({ section: "Casos por estado", label: c.estado, value: c.n });
   }
 
-  // Top actors
-  for (const a of overview.by_actor) {
-    rows.push({ section: "Actores principales", label: a.actor_id, value: a.count });
-  }
-
-  // Alerts
-  for (const al of overview.alerts) {
-    rows.push({ section: "Alertas", label: `[${al.level}] ${al.title}`, value: al.detail });
+  // Alertas de cobertura (secciones en riesgo)
+  for (const a of dashboard.alertas) {
+    rows.push({ section: "Secciones en riesgo", label: a.seccion, value: `faltan ${a.faltan}` });
   }
 
   // Provenance
   rows.push({ section: "Metadatos", label: "Generado por", value: "Atenea Civic Intelligence" });
-  rows.push({ section: "Metadatos", label: "Datos generados", value: overview.generated_at });
   rows.push({ section: "Metadatos", label: "Exportado", value: new Date().toISOString() });
 
   return rows;
@@ -89,19 +97,16 @@ export function rowsToCsv(rows: CsvRow[]): string {
 }
 
 /**
- * Serialize the briefing to CSV and trigger a client-side Blob download.
+ * Serialize the campaign briefing to CSV and trigger a client-side Blob download.
  * No external dependencies — uses the DOM URL/anchor pattern.
  */
-export function downloadCSV(
-  overview: AnalyticsOverview,
-  stateCount: number | null,
-): void {
-  const csv = rowsToCsv(briefingToCsvRows(overview, stateCount));
+export function downloadCSV(dashboard: ExecutiveDashboard): void {
+  const csv = rowsToCsv(briefingToCsvRows(dashboard));
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `Reporte_Atenea_${fileDate()}.csv`;
+  link.download = `Reporte_Campana_${fileDate()}.csv`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
