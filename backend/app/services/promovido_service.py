@@ -43,9 +43,22 @@ def _promovido_role_scoped(ctx: CampaignContext):
     return _role_scoped(ctx)
 
 
+# Whitelist of sortable columns — concrete Registro columns only. Prevents
+# arbitrary attribute/SQL injection via the `sort` query param and keeps
+# joined/categorical fields (e.g. prioridad, which lives on SeccionElectoral)
+# out of scope.
+_SORT_WHITELIST = {
+    "nombre": Registro.nombre_completo,
+    "seccion": Registro.seccion,
+    "created_at": Registro.created_at,
+    "edad": Registro.edad,
+}
+
+
 def list_promovidos(
     db: Session, ctx: CampaignContext, *, seccion: Optional[str], promotor: Optional[str],
     prioridad: Optional[str], q: Optional[str], limit: int, offset: int,
+    sort: str = "created_at", order: str = "desc",
 ) -> tuple[list[Registro], int, bool]:
     secciones = territory_service.scope_secciones(db, ctx.user)
     # COORDINADOR is the campaign executive → campaign-wide, no territory gate.
@@ -72,9 +85,14 @@ def list_promovidos(
         stmt = stmt.where(Registro.seccion.in_(pr))
 
     total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
-    rows = list(db.execute(
-        stmt.order_by(Registro.created_at.desc()).limit(limit).offset(offset)
-    ).scalars().all())
+
+    sort_col = _SORT_WHITELIST.get(sort, Registro.created_at)
+    direction = sa.asc if order == "asc" else sa.desc
+    # Stable secondary key (id) so pagination is deterministic across pages,
+    # even when the primary sort column has duplicate values.
+    stmt = stmt.order_by(direction(sort_col), Registro.id)
+
+    rows = list(db.execute(stmt.limit(limit).offset(offset)).scalars().all())
 
     # enrich with electoral context (single query)
     codes = {r.seccion for r in rows if r.seccion}
