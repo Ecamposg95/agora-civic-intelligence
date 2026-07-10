@@ -73,6 +73,10 @@ const DEFAULT_HANDLERS: Record<JobKind, JobHandler> = {
   },
 
   response: async (job) => {
+    // `server_id` is never set on a response job today (nothing downstream
+    // persists one), so this guard is always true in practice. It's
+    // forward-looking scaffolding: once evidence-blob upload (below) lands,
+    // it lets a retry skip re-submitting a response that already succeeded.
     if (!job.server_id) {
       await submitResponse(job.payload);
     }

@@ -1,12 +1,33 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { enqueue, enqueueJob, listQueue, markStatus, countPending, countFailed } from "./queue";
 import { getDb } from "./db";
 import { drainQueue } from "./sync";
 import type { QueuedBlob, QueuedJob } from "./types";
+import { createRegistro } from "@/api/registros";
+import { createMilitante, uploadDocumento } from "@/api/militantes";
+import type { Militante } from "@/api/militantes";
+import { submitResponse } from "@/api/atencion";
+
+vi.mock("@/api/registros", () => ({
+  createRegistro: vi.fn(),
+}));
+
+vi.mock("@/api/militantes", () => ({
+  createMilitante: vi.fn(),
+  uploadDocumento: vi.fn(),
+}));
+
+vi.mock("@/api/atencion", () => ({
+  submitResponse: vi.fn(),
+}));
 
 beforeEach(async () => {
   const db = await getDb();
   await db.clear("job_queue");
+  vi.mocked(createRegistro).mockReset();
+  vi.mocked(createMilitante).mockReset();
+  vi.mocked(uploadDocumento).mockReset();
+  vi.mocked(submitResponse).mockReset();
 });
 
 describe("sync engine", () => {
@@ -199,5 +220,108 @@ describe("sync engine", () => {
     expect(res.synced).toBe(1);
     expect(registroCalls).toBe(1);
     expect(militanteCalls).toBe(0);
+  });
+});
+
+// These tests exercise the REAL DEFAULT_HANDLERS (no `deps.handlers` overrides
+// injected), hitting the mocked `@/api/*` modules directly. This is the
+// coverage the rest of the file is missing: every other test in this file
+// replaces the handler under test, so the actual create->persist-server_id
+// ->upload-blobs orchestration (and its retry/idempotency property) never ran.
+describe("real default drain handlers", () => {
+  it("militante retry does not re-create: server_id persists across a failed upload, and a second drain does not call createMilitante again", async () => {
+    const blobs: QueuedBlob[] = [
+      { slot: "frente", mime: "image/jpeg", filename: "frente.jpg", data: new Blob(["a"]) },
+      { slot: "reverso", mime: "image/jpeg", filename: "reverso.jpg", data: new Blob(["b"]) },
+    ];
+    await enqueueJob("militante", { nombre_completo: "M", consentimiento: true }, "c", blobs);
+
+    vi.mocked(createMilitante).mockResolvedValue({ id: "m1" } as unknown as Militante);
+
+    // First invocation of uploadDocumento (the "frente" blob, first drain)
+    // fails as a network error (status undefined); every later call succeeds.
+    let uploadCallCount = 0;
+    vi.mocked(uploadDocumento).mockImplementation(async () => {
+      uploadCallCount++;
+      if (uploadCallCount === 1) {
+        throw Object.assign(new Error("Network"), { status: undefined });
+      }
+      return {} as unknown as Militante;
+    });
+
+    // First drain: createMilitante succeeds, first blob upload throws ->
+    // handler rejects -> row ends "error" (retryable), but server_id from the
+    // create call was already persisted before the loop touched the blobs.
+    const res1 = await drainQueue();
+    expect(res1.synced).toBe(0);
+    expect(res1.failed).toBe(1);
+    const rows1 = await listQueue();
+    expect(rows1).toHaveLength(1);
+    expect(rows1[0].status).toBe("error");
+    expect(rows1[0].server_id).toBe("m1");
+    expect(createMilitante).toHaveBeenCalledTimes(1);
+
+    // Second drain (uploadDocumento now succeeds for every call): job
+    // completes and is removed. createMilitante must NOT be called again --
+    // the persisted server_id short-circuits re-creation.
+    const res2 = await drainQueue();
+    expect(res2.synced).toBe(1);
+    expect(res2.failed).toBe(0);
+    expect(await listQueue()).toHaveLength(0);
+    expect(createMilitante).toHaveBeenCalledTimes(1);
+
+    // uploadDocumento was ultimately called for both blobs (frente was
+    // retried, reverso only needed the one successful attempt).
+    const uploadedSlots = vi.mocked(uploadDocumento).mock.calls.map((c) => c[1]);
+    expect(uploadedSlots).toContain("frente");
+    expect(uploadedSlots).toContain("reverso");
+  });
+
+  it("militante happy path: creates once and uploads both blobs in a single drain", async () => {
+    const blobs: QueuedBlob[] = [
+      { slot: "frente", mime: "image/jpeg", filename: "frente.jpg", data: new Blob(["a"]) },
+      { slot: "reverso", mime: "image/jpeg", filename: "reverso.jpg", data: new Blob(["b"]) },
+    ];
+    await enqueueJob("militante", { nombre_completo: "M", consentimiento: true }, "c", blobs);
+
+    vi.mocked(createMilitante).mockResolvedValue({ id: "m2" } as unknown as Militante);
+    vi.mocked(uploadDocumento).mockResolvedValue({} as unknown as Militante);
+
+    const res = await drainQueue();
+    expect(res.synced).toBe(1);
+    expect(await listQueue()).toHaveLength(0);
+
+    expect(createMilitante).toHaveBeenCalledTimes(1);
+    expect(uploadDocumento).toHaveBeenCalledTimes(2);
+    expect(uploadDocumento).toHaveBeenNthCalledWith(1, "m2", "frente", blobs[0].data);
+    expect(uploadDocumento).toHaveBeenNthCalledWith(2, "m2", "reverso", blobs[1].data);
+  });
+
+  it("dispatches response-kind jobs to submitResponse and removes the row on success", async () => {
+    const job = await enqueueJob("response", { form_id: "f1", answers: { q1: "a" } }, "c");
+
+    vi.mocked(submitResponse).mockResolvedValue(
+      {} as unknown as Awaited<ReturnType<typeof submitResponse>>
+    );
+
+    const res = await drainQueue();
+    expect(res.synced).toBe(1);
+    expect(submitResponse).toHaveBeenCalledTimes(1);
+    expect(submitResponse).toHaveBeenCalledWith(job.payload);
+    expect(await listQueue()).toHaveLength(0);
+  });
+
+  it("dispatches registro-kind jobs to the real createRegistro handler", async () => {
+    const job = await enqueue({ nombre_completo: "A", consentimiento: true }, "c");
+
+    vi.mocked(createRegistro).mockResolvedValue(
+      {} as unknown as Awaited<ReturnType<typeof createRegistro>>
+    );
+
+    const res = await drainQueue();
+    expect(res.synced).toBe(1);
+    expect(createRegistro).toHaveBeenCalledTimes(1);
+    expect(createRegistro).toHaveBeenCalledWith(job.payload);
+    expect(await listQueue()).toHaveLength(0);
   });
 });
