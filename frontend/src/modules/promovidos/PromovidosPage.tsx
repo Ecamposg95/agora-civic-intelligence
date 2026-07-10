@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Avatar } from "@/components/ui/Avatar";
@@ -23,6 +24,22 @@ const PRIORIDAD_CLASS: Record<string, string> = {
   ALTA_PERSUADIBLE: "bg-accent/10 text-accent",
 };
 
+const PRIORIDAD_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "", label: "Todas" },
+  { value: "ALTA_PERSUADIBLE", label: "Alta persuadible" },
+  { value: "COMPETITIVA", label: "Competitiva" },
+  { value: "DEFENDER_EXPANDIR", label: "Defender/Expandir" },
+  { value: "RECUPERAR_OPOSICION", label: "Recuperar oposición" },
+];
+
+/** Server sort keys — must match the backend's `sort=<...>` allow-list. */
+const SORT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "nombre", label: "Nombre" },
+  { value: "seccion", label: "Sección" },
+  { value: "created_at", label: "Fecha de captura" },
+  { value: "edad", label: "Edad" },
+];
+
 /** Up to two initials from a full name, for the Avatar element. */
 const initials = (nombre: string): string => {
   const parts = nombre.trim().split(/\s+/).filter(Boolean);
@@ -38,11 +55,16 @@ const formatFecha = (value: string | null | undefined): string => {
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("es-MX");
 };
 
+// NOTE: no `sortValue` on these columns — sorting is server-side for this
+// page (full 3500+ row dataset), driven by the explicit "Ordenar por"
+// control below. Client-side header sort over a single fetched page would
+// silently mislead users into thinking they see the globally-sorted top/
+// bottom rows, so DataTable's own click-to-sort headers are intentionally
+// left disabled here.
 const BASE_COLUMNS: Column<Promovido>[] = [
   {
     key: "nombre_completo",
     header: "Nombre",
-    sortValue: (p) => p.nombre_completo,
     render: (p) => (
       <span className="flex items-center gap-2.5">
         <Avatar initials={initials(p.nombre_completo)} variant="brand" />
@@ -55,27 +77,23 @@ const BASE_COLUMNS: Column<Promovido>[] = [
     header: "Edad",
     align: "right",
     hideOnCard: true,
-    sortValue: (p) => p.edad ?? -1,
     render: (p) => <span className="tabular-nums text-ink-muted">{p.edad ?? "—"}</span>,
   },
   {
     key: "seccion",
     header: "Sección",
-    sortValue: (p) => p.seccion ?? "",
     render: (p) => <span className="font-mono text-ink-muted">{p.seccion ?? "—"}</span>,
   },
   {
     key: "direccion",
     header: "Dirección",
     hideOnCard: true,
-    sortValue: (p) => p.direccion ?? "",
     render: (p) => <span className="text-ink-muted">{p.direccion ?? "—"}</span>,
   },
   {
     key: "colonia",
     header: "Colonia",
     hideOnCard: true,
-    sortValue: (p) => p.colonia ?? "",
     render: (p) => p.colonia ?? "—",
   },
   {
@@ -87,21 +105,18 @@ const BASE_COLUMNS: Column<Promovido>[] = [
   {
     key: "promotor",
     header: "Promotor",
-    sortValue: (p) => p.promotor ?? "",
     render: (p) => p.promotor ?? "—",
   },
   {
     key: "estructura",
     header: "Estructura",
     hideOnCard: true,
-    sortValue: (p) => p.estructura ?? "",
     render: (p) => p.estructura ?? "—",
   },
   {
     key: "created_at",
     header: "Fecha de captura",
     hideOnCard: true,
-    sortValue: (p) => (p.created_at ? new Date(p.created_at).getTime() : -Infinity),
     render: (p) => (
       <span className="font-mono text-xs tabular-nums text-ink-muted">
         {formatFecha(p.created_at)}
@@ -112,7 +127,6 @@ const BASE_COLUMNS: Column<Promovido>[] = [
     key: "participacion",
     header: "Part.",
     align: "right",
-    sortValue: (p) => p.participacion ?? -1,
     render: (p) =>
       p.participacion != null ? (
         <CellBar value={p.participacion} />
@@ -125,7 +139,6 @@ const BASE_COLUMNS: Column<Promovido>[] = [
     header: "Margen",
     align: "right",
     hideOnCard: true,
-    sortValue: (p) => p.margen ?? -Infinity,
     render: (p) => (
       <span className="font-mono tabular-nums text-ink-muted">{p.margen ?? "—"}</span>
     ),
@@ -133,7 +146,6 @@ const BASE_COLUMNS: Column<Promovido>[] = [
   {
     key: "prioridad",
     header: "Prioridad",
-    sortValue: (p) => p.prioridad ?? "",
     render: (p) =>
       p.prioridad ? (
         <span className={`pill ${PRIORIDAD_CLASS[p.prioridad] ?? ""}`}>
@@ -148,9 +160,22 @@ const BASE_COLUMNS: Column<Promovido>[] = [
 export function PromovidosPage() {
   const role = useAuthStore((s) => s.user?.role);
   const canReveal = role === "superadmin" || role === "admin" || role === "coordinador";
+  const canImport = canReveal;
 
+  // Raw inputs (debounced) vs. committed filter values.
   const [qInput, setQInput] = useState("");
+  const [seccionInput, setSeccionInput] = useState("");
+  const [promotorInput, setPromotorInput] = useState("");
+
   const [q, setQ] = useState("");
+  const [seccion, setSeccion] = useState("");
+  const [promotor, setPromotor] = useState("");
+  const [prioridad, setPrioridad] = useState("");
+
+  // Server-side sort — reflects the FULL dataset, not just the visible page.
+  const [sortKey, setSortKey] = useState<"nombre" | "seccion" | "created_at" | "edad">("created_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<Promovido | null>(null);
 
@@ -159,24 +184,40 @@ export function PromovidosPage() {
   const [revealing, setRevealing] = useState(false);
   const [revealError, setRevealError] = useState<string | null>(null);
 
-  // Debounce raw search input → committed value, resetting to the first page.
+  // Debounce raw text inputs → committed values, resetting to the first page.
   useEffect(() => {
     const t = setTimeout(() => {
       setOffset(0);
       setQ(qInput.trim());
+      setSeccion(seccionInput.trim());
+      setPromotor(promotorInput.trim());
     }, 300);
     return () => clearTimeout(t);
-  }, [qInput]);
+  }, [qInput, seccionInput, promotorInput]);
 
-  // Clear revealed claves and errors when pagination or search changes (PII hygiene).
+  // Clear revealed claves and errors whenever the visible set can change (PII hygiene).
   useEffect(() => {
     setRevealed({});
     setRevealError(null);
-  }, [offset, q]);
+  }, [offset, q, seccion, promotor, prioridad, sortKey, sortDir]);
 
-  const state = useAsync(() => listPromovidos({ q, limit: PAGE, offset }), [q, offset]);
+  const state = useAsync(
+    () =>
+      listPromovidos({
+        q,
+        seccion,
+        promotor,
+        prioridad,
+        sort: sortKey,
+        order: sortDir,
+        limit: PAGE,
+        offset,
+      }),
+    [q, seccion, promotor, prioridad, sortKey, sortDir, offset],
+  );
   const data = state.data;
   const items = data?.items ?? [];
+  const hasFilters = Boolean(q || seccion || promotor || prioridad);
 
   const shownRevealedCount = useMemo(
     () => items.filter((p) => Boolean(revealed[p.id])).length,
@@ -203,6 +244,14 @@ export function PromovidosPage() {
     }
   }, [items, revealed]);
 
+  const handleClearFilters = useCallback(() => {
+    setQInput("");
+    setSeccionInput("");
+    setPromotorInput("");
+    setPrioridad("");
+    setOffset(0);
+  }, []);
+
   const columns = useMemo<Column<Promovido>[]>(() => {
     if (!canReveal) return BASE_COLUMNS;
     return [
@@ -222,6 +271,8 @@ export function PromovidosPage() {
       },
     ];
   }, [canReveal, revealed]);
+
+  const isEmpty = !state.loading && !state.error && items.length === 0;
 
   return (
     <AppLayout title="Promovidos" crumb="Ciudadanía">
@@ -255,8 +306,6 @@ export function PromovidosPage() {
         </div>
       ) : (
         <DataState loading={state.loading} error={state.error} onRetry={state.reload}
-          isEmpty={!state.loading && !state.error && (data?.items.length ?? 0) === 0}
-          emptyMessage="Sin promovidos…"
           skeleton={
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {[0, 1].map((i) => (
@@ -271,7 +320,7 @@ export function PromovidosPage() {
                 value={String(data?.total ?? 0)}
                 countTo={data?.total ?? 0}
                 tone="warm"
-                context="En tu campaña"
+                context={hasFilters ? "Con filtros aplicados" : "En tu campaña"}
                 delay={0}
               />
               <MetricCard
@@ -287,41 +336,129 @@ export function PromovidosPage() {
             <div className="reveal" style={{ animationDelay: "160ms" }}>
               <SectionHeading eyebrow="Ciudadanía" title="Listado"
                 note={data ? `${data.items.length} de ${data.total}` : undefined} />
-              <div className="mb-3 mt-3 flex justify-end">
-                <input className="field-input h-8 w-48" placeholder="Buscar nombre…"
-                  value={qInput} onChange={(e) => setQInput(e.target.value)} />
-              </div>
-              <DataTable<Promovido>
-                columns={columns}
-                rows={items}
-                rowKey={(p) => p.id}
-                pageSize={PAGE}
-                defaultSortKey="nombre_completo"
-                defaultSortDir="asc"
-                emptyMessage="Sin promovidos…"
-                onRowClick={(p) => setSelected(p)}
-              />
 
-              {/* Server-side pagination — the table above only ever holds one page. */}
-              {!state.loading && !state.error && (data?.total ?? 0) > PAGE && (
-                <div className="mt-3 flex items-center justify-end gap-2">
+              {/* Filters */}
+              <div className="mb-3 mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <label className="flex flex-col gap-1.5">
+                  <span className="font-mono text-[11px] uppercase tracking-wider text-ink-faint">
+                    Buscar
+                  </span>
+                  <input className="field-input focus-ring w-full" placeholder="Buscar nombre…"
+                    value={qInput} onChange={(e) => setQInput(e.target.value)} />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="font-mono text-[11px] uppercase tracking-wider text-ink-faint">
+                    Sección
+                  </span>
+                  <input className="field-input focus-ring w-full" placeholder="0001"
+                    value={seccionInput} onChange={(e) => setSeccionInput(e.target.value)} />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="font-mono text-[11px] uppercase tracking-wider text-ink-faint">
+                    Promotor
+                  </span>
+                  <input className="field-input focus-ring w-full" placeholder="Nombre del promotor"
+                    value={promotorInput} onChange={(e) => setPromotorInput(e.target.value)} />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="font-mono text-[11px] uppercase tracking-wider text-ink-faint">
+                    Prioridad
+                  </span>
+                  <select className="field-input focus-ring w-full" value={prioridad}
+                    onChange={(e) => { setPrioridad(e.target.value); setOffset(0); }}>
+                    {PRIORIDAD_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {/* Server-side sort — applies to the full filtered dataset. */}
+              <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+                <div className="flex items-end gap-2">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="font-mono text-[11px] uppercase tracking-wider text-ink-faint">
+                      Ordenar por
+                    </span>
+                    <select className="field-input focus-ring w-44" value={sortKey}
+                      onChange={(e) => { setSortKey(e.target.value as "nombre" | "seccion" | "created_at" | "edad"); setOffset(0); }}>
+                      {SORT_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </label>
                   <button
                     type="button"
-                    disabled={state.loading || offset === 0}
-                    onClick={() => setOffset(Math.max(0, offset - PAGE))}
-                    className="btn-ghost focus-ring disabled:cursor-not-allowed disabled:opacity-40"
+                    className="btn-ghost focus-ring"
+                    onClick={() => {
+                      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+                      setOffset(0);
+                    }}
+                    title={sortDir === "asc" ? "Ascendente" : "Descendente"}
+                    aria-label={sortDir === "asc" ? "Orden ascendente, cambiar a descendente" : "Orden descendente, cambiar a ascendente"}
                   >
-                    Anterior
-                  </button>
-                  <button
-                    type="button"
-                    disabled={state.loading || !data || offset + PAGE >= data.total}
-                    onClick={() => setOffset(offset + PAGE)}
-                    className="btn-ghost focus-ring disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Siguiente
+                    {sortDir === "asc" ? "↑ Ascendente" : "↓ Descendente"}
                   </button>
                 </div>
+
+                {hasFilters && (
+                  <button type="button" className="btn-ghost focus-ring" onClick={handleClearFilters}>
+                    Limpiar filtros
+                  </button>
+                )}
+              </div>
+
+              {isEmpty ? (
+                <div className="card-premium reveal flex flex-col items-center gap-3 px-5 py-12 text-center">
+                  <p className="text-sm text-ink-muted">
+                    {hasFilters
+                      ? "Ningún promovido coincide con estos filtros."
+                      : "Aún no hay promovidos capturados."}
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Link to="/captura-rapida" className="btn-primary focus-ring">
+                      Capturar
+                    </Link>
+                    {canImport && (
+                      <Link to="/promovidos/importar" className="btn-ghost focus-ring">
+                        Importar Excel
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <DataTable<Promovido>
+                    columns={columns}
+                    rows={items}
+                    rowKey={(p) => p.id}
+                    pageSize={PAGE}
+                    emptyMessage="Sin promovidos…"
+                    onRowClick={(p) => setSelected(p)}
+                  />
+
+                  {/* Server-side pagination — the table above only ever holds one page. */}
+                  {!state.loading && !state.error && (data?.total ?? 0) > PAGE && (
+                    <div className="mt-3 flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        disabled={state.loading || offset === 0}
+                        onClick={() => setOffset(Math.max(0, offset - PAGE))}
+                        className="btn-ghost focus-ring disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Anterior
+                      </button>
+                      <button
+                        type="button"
+                        disabled={state.loading || !data || offset + PAGE >= data.total}
+                        onClick={() => setOffset(offset + PAGE)}
+                        className="btn-ghost focus-ring disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Siguiente
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

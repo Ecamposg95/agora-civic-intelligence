@@ -1,10 +1,14 @@
 """GET /promovidos — scope territorial + enriquecimiento electoral."""
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import delete, select
 from tests.conftest import auth_headers, ALPHA_CAMPAIGN_ID, TestingSessionLocal
+from app.dependencies import CampaignContext
 from app.models.electoral_area import AreaLevel, ElectoralArea
 from app.models.seccion_electoral import SeccionElectoral
 from app.models.registro import Registro
 from app.models.user import User
+from app.services import promovido_service
 
 
 def _h(client, email):
@@ -154,3 +158,87 @@ def test_promovidos_import_forbidden_for_activista(client):
                     files={"file": ("x.xlsx", io.BytesIO(b"x"), _XLSX_MIME)},
                     data={"commit": "false"}, headers=h)
     assert r.status_code == 403
+
+
+# --- server-side sort -------------------------------------------------------
+
+def _coord_ctx(db):
+    coord = db.execute(select(User).where(User.email == "coord@alpha.gov")).scalar_one()
+    return CampaignContext(
+        user=coord, organization_id=coord.organization_id, role=coord.role,
+        campaign_id=ALPHA_CAMPAIGN_ID)
+
+
+def _setup_sort_fixtures():
+    """Three registros with distinct nombre_completo and created_at, in an
+    order that would NOT already satisfy either sort (regression guard against
+    a no-op ORDER BY)."""
+    db = TestingSessionLocal()
+    try:
+        coord = db.execute(select(User).where(User.email == "coord@alpha.gov")).scalar_one()
+        now = datetime.now(timezone.utc)
+        # Insertion order: Beto (oldest), Ana (newest), Carla (middle).
+        db.add(Registro(organization_id=coord.organization_id, campaign_id=ALPHA_CAMPAIGN_ID,
+                        activista_id=None, nombre_completo="Beto Sort", seccion="5001",
+                        promotor="SORT", consentimiento=True, client_uuid="sort-1",
+                        created_at=now - timedelta(days=2)))
+        db.add(Registro(organization_id=coord.organization_id, campaign_id=ALPHA_CAMPAIGN_ID,
+                        activista_id=None, nombre_completo="Ana Sort", seccion="5001",
+                        promotor="SORT", consentimiento=True, client_uuid="sort-2",
+                        created_at=now))
+        db.add(Registro(organization_id=coord.organization_id, campaign_id=ALPHA_CAMPAIGN_ID,
+                        activista_id=None, nombre_completo="Carla Sort", seccion="5001",
+                        promotor="SORT", consentimiento=True, client_uuid="sort-3",
+                        created_at=now - timedelta(days=1)))
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_list_promovidos_sort_nombre_asc():
+    _setup_sort_fixtures()
+    db = TestingSessionLocal()
+    try:
+        ctx = _coord_ctx(db)
+        rows, total, _ = promovido_service.list_promovidos(
+            db, ctx, seccion="5001", promotor=None, prioridad=None, q=None,
+            limit=50, offset=0, sort="nombre", order="asc")
+        assert [r.nombre_completo for r in rows] == ["Ana Sort", "Beto Sort", "Carla Sort"]
+        assert total == 3
+    finally:
+        db.close()
+
+
+def test_list_promovidos_sort_created_at_desc():
+    db = TestingSessionLocal()
+    try:
+        ctx = _coord_ctx(db)
+        rows, _, _ = promovido_service.list_promovidos(
+            db, ctx, seccion="5001", promotor=None, prioridad=None, q=None,
+            limit=50, offset=0, sort="created_at", order="desc")
+        assert [r.nombre_completo for r in rows] == ["Ana Sort", "Carla Sort", "Beto Sort"]
+    finally:
+        db.close()
+
+
+def test_list_promovidos_unknown_sort_falls_back_to_created_at():
+    db = TestingSessionLocal()
+    try:
+        ctx = _coord_ctx(db)
+        rows, _, _ = promovido_service.list_promovidos(
+            db, ctx, seccion="5001", promotor=None, prioridad=None, q=None,
+            limit=50, offset=0, sort="prioridad", order="desc")
+        # falls back to created_at desc, same as the explicit case above —
+        # no exception raised for an out-of-whitelist column.
+        assert [r.nombre_completo for r in rows] == ["Ana Sort", "Carla Sort", "Beto Sort"]
+    finally:
+        db.close()
+
+
+def test_promovidos_api_sort_nombre_asc(client):
+    r = client.get(
+        "/api/promovidos?seccion=5001&sort=nombre&order=asc",
+        headers=_h(client, "coord@alpha.gov"))
+    assert r.status_code == 200, r.text
+    names = [i["nombre_completo"] for i in r.json()["items"]]
+    assert names == ["Ana Sort", "Beto Sort", "Carla Sort"]

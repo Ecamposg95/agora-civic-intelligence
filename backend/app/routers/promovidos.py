@@ -29,10 +29,13 @@ def list_promovidos(
     q: Annotated[Optional[str], Query()] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
+    sort: Annotated[Optional[str], Query()] = None,
+    order: Annotated[Optional[str], Query()] = None,
 ) -> PromovidoList:
     rows, total, has_territory = promovido_service.list_promovidos(
         db, ctx, seccion=seccion, promotor=promotor, prioridad=prioridad,
-        q=q, limit=limit, offset=offset)
+        q=q, limit=limit, offset=offset,
+        sort=sort or "created_at", order=order or "desc")
     return PromovidoList(
         items=[PromovidoRead.model_validate(r, from_attributes=True) for r in rows],
         total=total, limit=limit, offset=offset, has_territory=has_territory)
