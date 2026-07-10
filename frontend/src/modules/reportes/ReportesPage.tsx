@@ -1,8 +1,7 @@
 // frontend/src/modules/reportes/ReportesPage.tsx
 import { useMemo, type ReactNode } from "react";
 
-import { getOverview } from "@/api/analytics";
-import { getAreas } from "@/api/maps";
+import { getExecutiveDashboard } from "@/api/dashboard";
 import { AreaTrend } from "@/components/charts/AreaTrend";
 import { Bars } from "@/components/charts/Bars";
 import { ChartFrame } from "@/components/charts/ChartFrame";
@@ -14,59 +13,42 @@ import { MetricCard } from "@/components/ui/MetricCard";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { SkeletonCard } from "@/components/ui/SkeletonCard";
 import {
+  AlertIcon,
   AnalyticsIcon,
   DatabaseIcon,
-  LayersIcon,
-  UserIcon,
+  MapIcon,
+  ShieldIcon,
   VotersIcon,
 } from "@/components/ui/icons";
 import { useAsync } from "@/hooks/useAsync";
-import type { AnalyticsOverview } from "@/types/analytics";
+import type { ExecutiveDashboard } from "@/api/dashboard";
 
 import { downloadCSV } from "./export";
 
 const intFmt = new Intl.NumberFormat("es-MX");
+const pctFmt = (n: number) => `${intFmt.format(Math.round(n))}%`;
 
-/** Display-only capitalization for level labels (e.g. "municipio" → "Municipio"). */
-function cap(s: string): string {
-  return s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s;
-}
-
-/** Localized, human-readable timestamp for the briefing provenance line. */
-function formatTimestamp(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
+/** Localized, human-readable timestamp for the print/export provenance line. */
+function formatTimestamp(date: Date): string {
   return new Intl.DateTimeFormat("es-MX", {
     dateStyle: "long",
     timeStyle: "short",
-  }).format(d);
+  }).format(date);
 }
 
-const ALERT_TONE: Record<string, string> = {
-  info: "border-accent/40 text-accent",
-  warning: "border-state-warning/40 text-state-warning",
-  critical: "border-state-critical/40 text-state-critical",
-};
-
 export function ReportesPage() {
-  // Primary briefing payload (real platform analytics).
-  const overviewState = useAsync(() => getOverview(), []);
-  // Secondary, light call: real state-level cartography count.
-  const statesState = useAsync(() => getAreas("state"), []);
+  // Campaign executive briefing — same payload the Command Center renders.
+  const dashboardState = useAsync<ExecutiveDashboard>(() => getExecutiveDashboard(), []);
 
-  const overview = overviewState.data;
-  const stateCount = useMemo<number | null>(() => {
-    if (!statesState.data) return null;
-    return statesState.data.features.length;
-  }, [statesState.data]);
+  const dashboard = dashboardState.data;
 
   const isEmpty =
-    !overviewState.loading &&
-    !overviewState.error &&
-    overview === null;
+    !dashboardState.loading &&
+    !dashboardState.error &&
+    dashboard === null;
 
   const handleCSV = () => {
-    if (overview) downloadCSV(overview, stateCount);
+    if (dashboard) downloadCSV(dashboard);
   };
 
   const handlePrint = () => {
@@ -74,18 +56,18 @@ export function ReportesPage() {
   };
 
   return (
-    <AppLayout title="Reportes Ejecutivos" crumb="Gobernanza">
+    <AppLayout title="Reportes de Campaña" crumb="Gobernanza">
       <PageHeader
-        eyebrow="Gobernanza"
-        title="Reportes"
-        accent="Ejecutivos"
-        subtitle="Briefing institucional compuesto de datos reales de la plataforma."
+        eyebrow="Campaña"
+        title="Reporte"
+        accent="de Campaña"
+        subtitle="Briefing ejecutivo compuesto de datos reales de campaña: promoción, afiliación, atención ciudadana y cobertura."
         actions={
           <div className="flex flex-wrap items-center gap-3 print:hidden">
             <button
               type="button"
               onClick={handleCSV}
-              disabled={!overview}
+              disabled={!dashboard}
               className="btn-ghost disabled:cursor-not-allowed disabled:opacity-40"
             >
               <DatabaseIcon width={16} height={16} />
@@ -94,7 +76,7 @@ export function ReportesPage() {
             <button
               type="button"
               onClick={handlePrint}
-              disabled={!overview}
+              disabled={!dashboard}
               className="btn-primary disabled:cursor-not-allowed disabled:opacity-40"
             >
               <AnalyticsIcon width={16} height={16} />
@@ -105,11 +87,11 @@ export function ReportesPage() {
       />
 
       <DataState
-        loading={overviewState.loading}
-        error={overviewState.error}
+        loading={dashboardState.loading}
+        error={dashboardState.error}
         isEmpty={isEmpty}
-        onRetry={overviewState.reload}
-        emptyMessage="Sin datos de plataforma todavía — analítica pendiente."
+        onRetry={dashboardState.reload}
+        emptyMessage="Sin datos de campaña todavía — captura pendiente."
         skeleton={
           <div className="space-y-4">
             {/* P-2: SkeletonCard replaces raw animate-pulse divs */}
@@ -129,43 +111,68 @@ export function ReportesPage() {
           </div>
         }
       >
-        {overview && <Briefing overview={overview} stateCount={stateCount} />}
+        {dashboard && <Briefing dashboard={dashboard} />}
       </DataState>
     </AppLayout>
   );
 }
 
 interface BriefingProps {
-  overview: AnalyticsOverview;
-  stateCount: number | null;
+  dashboard: ExecutiveDashboard;
 }
 
 /**
  * The printable briefing region. The `print:` utilities flip this block to a
  * clean white/black document and hide chrome so the PDF/print output reads as
- * an institutional report. Only real values are shown; all are labelled with
- * their source and generation timestamp.
+ * an institutional campaign report. Only real values are shown; the export
+ * timestamp is generated client-side at print/export time.
  */
-function Briefing({ overview, stateCount }: BriefingProps) {
+function Briefing({ dashboard }: BriefingProps) {
   // Defensive: a partial/degraded payload should never white-screen the page.
-  const coverage = overview.coverage ?? [];
-  const activity = overview.trends?.activity ?? [];
-  const byAction = overview.by_action ?? [];
-  const byActor = overview.by_actor ?? [];
-  const alerts = overview.alerts ?? [];
+  const tendencia = dashboard.tendencia ?? [];
+  const porSeccionTop = dashboard.por_seccion_top ?? [];
+  const casosPorEstado = dashboard.casos_por_estado ?? [];
+  const alertas = dashboard.alertas ?? [];
+
+  const now = useMemo(() => new Date(), []);
+
+  const promovidosContext = useMemo(() => {
+    if (dashboard.promovidos.meta == null) return undefined;
+    const pct =
+      dashboard.promovidos.pct != null ? ` · ${intFmt.format(dashboard.promovidos.pct)}%` : "";
+    return `meta ${intFmt.format(dashboard.promovidos.meta)}${pct}`;
+  }, [dashboard.promovidos]);
+
+  const afiliadosContext = useMemo(
+    () => `${intFmt.format(dashboard.afiliados.validados)} validados`,
+    [dashboard.afiliados],
+  );
+
+  const casosContext = useMemo(
+    () => `${intFmt.format(dashboard.casos.sla_vencidos)} con SLA vencido`,
+    [dashboard.casos],
+  );
+
+  const casosTone: "critical" | "teal" = dashboard.casos.sla_vencidos > 0 ? "critical" : "teal";
+
+  const coberturaContext = useMemo(
+    () =>
+      `${intFmt.format(dashboard.cobertura.al_dia)} al día · ${intFmt.format(
+        dashboard.cobertura.en_riesgo,
+      )} en riesgo`,
+    [dashboard.cobertura],
+  );
 
   // P-8: reveal wraps the primary content block for entrance animation
   return (
     <div className="reveal space-y-6 print:space-y-3 print:bg-white print:p-0 print:text-black">
       {/* Print-only header (hidden on screen — screen uses PageHeader). */}
       <div className="hidden print:mb-4 print:block print:border-b print:border-black/20 print:pb-3">
-        <h1 className="text-2xl font-bold">Atenea · Reporte Ejecutivo</h1>
+        <h1 className="text-2xl font-bold">Atenea · Reporte de Campaña</h1>
         <p className="text-sm">
-          Briefing institucional compuesto de datos reales de la plataforma.
+          Briefing ejecutivo compuesto de datos reales de campaña.
         </p>
-        <p className="mt-1 text-xs">
-          Datos generados: {formatTimestamp(overview.generated_at)}
-        </p>
+        <p className="mt-1 text-xs">Generado: {formatTimestamp(now)}</p>
       </div>
 
       {/* KPI summary */}
@@ -173,135 +180,130 @@ function Briefing({ overview, stateCount }: BriefingProps) {
         <SectionHeading eyebrow="Panorama" title="Indicadores clave" />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 print:grid-cols-4 print:gap-2">
           <KpiCard
-            label="Áreas electorales"
-            value={overview.summary?.electoral_areas ?? 0}
-            icon={<LayersIcon />}
-            tone="accent"
+            label="Promovidos"
+            value={dashboard.promovidos.total}
+            context={promovidosContext}
+            icon={<VotersIcon />}
+            tone="warm"
             delay={60}
           />
           <KpiCard
-            label="Organizaciones"
-            value={overview.summary?.organizations ?? 0}
-            icon={<UserIcon />}
-            tone="teal"
+            label="Afiliados"
+            value={dashboard.afiliados.total}
+            context={afiliadosContext}
+            icon={<ShieldIcon />}
+            tone="accent"
             delay={120}
           />
-          {/* Warm/coral is the featured KPI accent — never tied to a semantic
-              meaning, so it no longer borrows the "warning" tone here. */}
           <KpiCard
-            label="Usuarios"
-            value={overview.summary?.users ?? 0}
-            icon={<VotersIcon />}
-            tone="warm"
+            label="Casos abiertos"
+            value={dashboard.casos.abiertos}
+            context={casosContext}
+            icon={<AlertIcon />}
+            tone={casosTone}
             delay={180}
           />
           <KpiCard
-            label="Fuentes de datos"
-            value={overview.summary?.data_sources ?? 0}
-            icon={<DatabaseIcon />}
-            tone="accent"
+            label="Cobertura seccional"
+            value={dashboard.cobertura.pct_global ?? 0}
+            format={dashboard.cobertura.pct_global != null ? pctFmt : undefined}
+            context={coberturaContext}
+            icon={<MapIcon />}
+            tone="teal"
             delay={240}
           />
         </div>
       </div>
 
-      {/* Coverage by level + activity trend */}
+      {/* Tendencia + top secciones */}
       <div className="space-y-4 print:space-y-2">
-        <SectionHeading eyebrow="Detalle" title="Cobertura y tendencia" />
+        <SectionHeading eyebrow="Detalle" title="Tendencia y secciones" />
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[360px_1fr] print:grid-cols-2 print:gap-3">
           <ChartFrame
-            title="Cobertura por nivel"
-            caption={
-              stateCount !== null
-                ? `${intFmt.format(stateCount)} entidades cartografiadas`
-                : undefined
-            }
-            empty={coverage.length === 0}
+            title="Top secciones"
+            caption="Promovidos acumulados"
+            empty={porSeccionTop.length === 0}
             className="print:bg-white print:text-black print:border print:border-black/20"
           >
             <Bars
-              items={coverage.map((c) => ({
-                label: cap(c.level),
-                value: c.count,
+              items={porSeccionTop.map((s) => ({
+                label: s.seccion,
+                value: s.promovidos,
               }))}
+              highlightFirst
             />
-            <p className="mt-4 text-[11px] leading-relaxed text-ink-faint">
-              Fuente: cobertura territorial registrada en la plataforma.
-            </p>
           </ChartFrame>
 
           <ChartFrame
-            title="Tendencia de actividad"
-            caption="Eventos por periodo"
-            empty={activity.length === 0}
+            title="Promovidos por semana"
+            caption="Tendencia de captura"
+            empty={tendencia.length === 0}
             className="print:bg-white print:text-black print:border print:border-black/20"
           >
             <AreaTrend
-              points={activity.map((p) => ({
-                x: p.period,
-                y: p.value,
+              points={tendencia.map((p) => ({
+                x: p.semana,
+                y: p.promovidos,
               }))}
             />
           </ChartFrame>
         </div>
       </div>
 
-      {/* Top actions + top actors */}
+      {/* Casos por estado + alertas de cobertura */}
       <div className="space-y-4 print:space-y-2">
         <SectionHeading
           eyebrow="Detalle"
-          title="Acciones y actores"
-          note={`Top ${byAction.length} · Top ${byActor.length}`}
+          title="Atención ciudadana y cobertura"
+          note={`${casosPorEstado.length} estados · ${alertas.length} alertas`}
         />
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 print:grid-cols-2 print:gap-3">
           <ChartFrame
-            title="Acciones principales"
-            empty={byAction.length === 0}
+            title="Casos por estado"
+            empty={casosPorEstado.length === 0}
             className="print:bg-white print:text-black print:border print:border-black/20"
           >
             <Bars
-              items={byAction.map((a) => ({
-                label: a.action,
-                value: a.count,
+              items={casosPorEstado.map((c) => ({
+                label: c.estado,
+                value: c.n,
               }))}
               highlightFirst
             />
           </ChartFrame>
 
           <ChartFrame
-            title="Actores principales"
-            empty={byActor.length === 0}
+            title="Secciones en riesgo"
+            caption="Faltan promovidos"
+            empty={alertas.length === 0}
             className="print:bg-white print:text-black print:border print:border-black/20"
           >
             <Bars
-              items={byActor.map((a) => ({
-                label: a.actor_id,
-                value: a.count,
+              items={alertas.map((a) => ({
+                label: a.seccion,
+                value: a.faltan,
               }))}
-              highlightFirst
             />
           </ChartFrame>
         </div>
       </div>
 
       {/* Alerts (only if present) */}
-      {alerts.length > 0 && (
+      {alertas.length > 0 && (
         <Card
           title="Alertas"
           accentDot
           className="reveal print:border print:border-black/20 print:bg-white print:text-black"
         >
           <ul className="space-y-2">
-            {alerts.map((a, i) => (
+            {alertas.map((a, i) => (
               <li
-                key={`${a.title}-${i}`}
-                className={`rounded-card border px-3 py-2 text-sm ${
-                  ALERT_TONE[a.level] ?? "border-line text-ink-muted"
-                } print:border-black/30 print:text-black`}
+                key={`${a.seccion}-${i}`}
+                className="rounded-card border border-state-warning/40 px-3 py-2 text-sm text-state-warning print:border-black/30 print:text-black"
               >
-                <span className="font-semibold">{a.title}</span>
+                <span className="font-semibold">Sección {a.seccion}</span>
                 <span className="ml-2 text-ink-muted print:text-black/70">
-                  {a.detail}
+                  faltan {intFmt.format(a.faltan)} promovidos
                 </span>
               </li>
             ))}
@@ -312,9 +314,9 @@ function Briefing({ overview, stateCount }: BriefingProps) {
       {/* Provenance footer */}
       <div className="card-premium hud-corners reveal flex flex-col gap-2 px-5 py-4 text-xs text-ink-faint sm:flex-row sm:items-center sm:justify-between print:border print:border-black/20 print:bg-white print:text-black/70">
         <span>
-          Datos generados:{" "}
+          Generado:{" "}
           <span className="font-mono text-ink-muted print:text-black">
-            {formatTimestamp(overview.generated_at)}
+            {formatTimestamp(now)}
           </span>
         </span>
         <span className="font-mono uppercase tracking-wide">
@@ -328,18 +330,21 @@ function Briefing({ overview, stateCount }: BriefingProps) {
 interface KpiCardProps {
   label: string;
   value: number;
+  context?: string;
   icon: ReactNode;
-  tone: "accent" | "teal" | "warm";
+  tone: "accent" | "teal" | "warm" | "critical";
   delay: number;
+  format?: (n: number) => string;
 }
 
-function KpiCard({ label, value, icon, tone, delay }: KpiCardProps) {
+function KpiCard({ label, value, context, icon, tone, delay, format }: KpiCardProps) {
   return (
     <MetricCard
       label={label}
-      value={intFmt.format(value)}
+      value={format ? format(value) : intFmt.format(value)}
       countTo={value}
-      format={(n) => intFmt.format(Math.round(n))}
+      format={format ?? ((n) => intFmt.format(Math.round(n)))}
+      context={context}
       icon={icon}
       tone={tone}
       delay={delay}
