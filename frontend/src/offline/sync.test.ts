@@ -293,8 +293,14 @@ describe("real default drain handlers", () => {
 
     expect(createMilitante).toHaveBeenCalledTimes(1);
     expect(uploadDocumento).toHaveBeenCalledTimes(2);
-    expect(uploadDocumento).toHaveBeenNthCalledWith(1, "m2", "frente", blobs[0].data);
-    expect(uploadDocumento).toHaveBeenNthCalledWith(2, "m2", "reverso", blobs[1].data);
+    expect(uploadDocumento).toHaveBeenNthCalledWith(
+      1, "m2", "frente", blobs[0].data,
+      { headers: { "X-Campaign-Id": "c" } },
+    );
+    expect(uploadDocumento).toHaveBeenNthCalledWith(
+      2, "m2", "reverso", blobs[1].data,
+      { headers: { "X-Campaign-Id": "c" } },
+    );
   });
 
   it("dispatches response-kind jobs to submitResponse and removes the row on success", async () => {
@@ -307,7 +313,7 @@ describe("real default drain handlers", () => {
     const res = await drainQueue();
     expect(res.synced).toBe(1);
     expect(submitResponse).toHaveBeenCalledTimes(1);
-    expect(submitResponse).toHaveBeenCalledWith(job.payload);
+    expect(submitResponse).toHaveBeenCalledWith(job.payload, { headers: { "X-Campaign-Id": "c" } });
     expect(await listQueue()).toHaveLength(0);
   });
 
@@ -321,7 +327,60 @@ describe("real default drain handlers", () => {
     const res = await drainQueue();
     expect(res.synced).toBe(1);
     expect(createRegistro).toHaveBeenCalledTimes(1);
-    expect(createRegistro).toHaveBeenCalledWith(job.payload);
+    expect(createRegistro).toHaveBeenCalledWith(job.payload, { headers: { "X-Campaign-Id": "c" } });
     expect(await listQueue()).toHaveLength(0);
+  });
+});
+
+// Cross-cutting bug fix: the drain must pin each request to the campaign the
+// job was CAPTURED under (`job.campaign_id`), not whatever campaign happens
+// to be active (localStorage["agora-campaign"]) at drain time. Otherwise a
+// coordinator who captures offline under campaign A, switches to campaign B,
+// then reconnects gets their entities created under B.
+describe("drain pins requests to the job's campaign, not the active one", () => {
+  // The test environment runs in node (no `localStorage` global), and these
+  // handlers are exercised with `createRegistro`/`createMilitante`/
+  // `uploadDocumento` mocked directly — the real `client.ts` interceptor
+  // (which reads `localStorage["agora-campaign"]`) never runs in this test.
+  // So instead of setting localStorage, we assert directly on what the
+  // mocked API fns were called with: the job's OWN campaign_id ("camp-A"),
+  // which must win even though a different campaign ("camp-B") is meant to
+  // be "active" — i.e. the drain must never rely on whatever is currently in
+  // localStorage.
+
+  it("registro handler pins X-Campaign-Id to the job's campaign", async () => {
+    const job = await enqueue({ nombre_completo: "A", consentimiento: true }, "camp-A");
+
+    vi.mocked(createRegistro).mockResolvedValue(
+      {} as unknown as Awaited<ReturnType<typeof createRegistro>>
+    );
+
+    const res = await drainQueue();
+    expect(res.synced).toBe(1);
+    expect(createRegistro).toHaveBeenCalledWith(
+      job.payload,
+      { headers: { "X-Campaign-Id": "camp-A" } },
+    );
+  });
+
+  it("militante handler pins X-Campaign-Id (create + uploads) to the job's campaign", async () => {
+    const blobs: QueuedBlob[] = [
+      { slot: "frente", mime: "image/jpeg", filename: "frente.jpg", data: new Blob(["a"]) },
+    ];
+    await enqueueJob("militante", { nombre_completo: "M", consentimiento: true }, "camp-A", blobs);
+
+    vi.mocked(createMilitante).mockResolvedValue({ id: "m3" } as unknown as Militante);
+    vi.mocked(uploadDocumento).mockResolvedValue({} as unknown as Militante);
+
+    const res = await drainQueue();
+    expect(res.synced).toBe(1);
+    expect(createMilitante).toHaveBeenCalledWith(
+      expect.anything(),
+      { headers: { "X-Campaign-Id": "camp-A" } },
+    );
+    expect(uploadDocumento).toHaveBeenCalledWith(
+      "m3", "frente", blobs[0].data,
+      { headers: { "X-Campaign-Id": "camp-A" } },
+    );
   });
 });

@@ -53,22 +53,35 @@ function isPermanentClientError(status: number | undefined): boolean {
  * was created but whose success response was lost will NOT create a
  * duplicate on the next drain — the server returns/finds the existing record.
  */
+/**
+ * Every default handler pins its request(s) to the campaign the job was
+ * captured under (`job.campaign_id`), NOT whatever campaign is active in
+ * localStorage at drain time. Without this, a coordinator who captures
+ * offline under campaign A, switches to campaign B, then reconnects would
+ * have their queued rows created under B — the client.ts interceptor only
+ * fills in X-Campaign-Id when the caller hasn't already set it, so passing
+ * it explicitly here overrides the "currently active" campaign.
+ */
+function campaignConfig(job: QueuedJob) {
+  return { headers: { "X-Campaign-Id": job.campaign_id } };
+}
+
 const DEFAULT_HANDLERS: Record<JobKind, JobHandler> = {
   registro: async (job) => {
-    await createRegistro(job.payload as unknown as RegistroCreate);
+    await createRegistro(job.payload as unknown as RegistroCreate, campaignConfig(job));
   },
 
   militante: async (job) => {
     const militante: Pick<Militante, "id"> = job.server_id
       ? { id: job.server_id }
-      : await createMilitante(job.payload as unknown as MilitanteCreate);
+      : await createMilitante(job.payload as unknown as MilitanteCreate, campaignConfig(job));
     // Persist server_id BEFORE uploading photos: if a photo upload throws and
     // this job is retried, we must not re-create the militante. createMilitante
     // is idempotent by client_uuid anyway, but skipping the re-create call
     // entirely once we have a server id is cleaner and cheaper.
     await markStatus(job.client_uuid, "syncing", { server_id: militante.id });
     for (const blob of job.blobs) {
-      await uploadDocumento(militante.id, blob.slot as "frente" | "reverso" | "firma", blob.data);
+      await uploadDocumento(militante.id, blob.slot as "frente" | "reverso" | "firma", blob.data, campaignConfig(job));
     }
   },
 
@@ -78,7 +91,7 @@ const DEFAULT_HANDLERS: Record<JobKind, JobHandler> = {
     // forward-looking scaffolding: once evidence-blob upload (below) lands,
     // it lets a retry skip re-submitting a response that already succeeded.
     if (!job.server_id) {
-      await submitResponse(job.payload);
+      await submitResponse(job.payload, campaignConfig(job));
     }
     // TODO(T3): evidence-blob upload for `response` jobs. The only existing
     // evidence endpoint, `uploadCasoEvidencia(casoId, blob)`, is scoped to a
