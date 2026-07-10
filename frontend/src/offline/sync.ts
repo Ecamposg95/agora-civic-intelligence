@@ -84,7 +84,11 @@ export async function drainQueue(deps?: DrainDeps): Promise<DrainResult> {
       await markStatus(row.client_uuid, "syncing");
       try {
         // payload.client_uuid is baked in at enqueue — backend deduplicates on it
-        await create(row.payload);
+        // NOTE(T3): queue.ts now stores a generic Record<string, unknown> payload
+        // (multi-entity job_queue); this drain loop is registro-only until T3
+        // rewrites it to dispatch per `row.kind`. Cast is safe today because
+        // every queued row is still kind="registro".
+        await create(row.payload as unknown as RegistroCreate);
         await removeQueued(row.client_uuid);
         synced++;
       } catch (e) {

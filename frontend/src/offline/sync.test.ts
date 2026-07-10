@@ -5,7 +5,7 @@ import { drainQueue } from "./sync";
 
 beforeEach(async () => {
   const db = await getDb();
-  await db.clear("registro_queue");
+  await db.clear("job_queue");
 });
 
 describe("sync engine", () => {
