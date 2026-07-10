@@ -87,6 +87,10 @@ export interface PromovidoFilters {
   q?: string;
   limit?: number;
   offset?: number;
+  /** Server sort key: nombre | seccion | created_at | edad. */
+  sort?: string;
+  /** Server sort direction: asc | desc. */
+  order?: string;
 }
 
 export async function listPromovidos(f: PromovidoFilters = {}): Promise<PromovidoList> {
